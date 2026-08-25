@@ -18,6 +18,7 @@
   <main>
     <div id="selectorEmpresa" class="chip-row" style="display:none;"></div>
     <div id="acciones"></div>
+    <div id="seccionResumen"></div>
   </main>
 </div>
 <script src="js/app.js"></script>
@@ -41,6 +42,7 @@
         aplicarTema(e);
         document.getElementById("subModulo").textContent = e;
         render();
+        cargarResumen();
       };
       render();
     }
@@ -61,6 +63,40 @@
       html += `<a class="accion" href="reporte.html?modulo=${mod.key}"><span class="icono">&#128202;</span>Reporte y KPI's</a>`;
     }
     acciones.innerHTML = html;
+
+    // Resumen directo en esta pantalla, sin tener que entrar a "Entregar y devoluciones":
+    // - Bodega/Admin ven la cola de pendientes (de un vistazo, solo lectura).
+    // - Producción ve sus propias requisiciones con el estado actual.
+    async function cargarResumen() {
+      const cont = document.getElementById("seccionResumen");
+      const reqData = await apiGet("getRequisiciones", { modulo: mod.key });
+      const items = reqData.items || [];
+      const cantSolHeader = buscarEncabezado(items[0], "Cantidad solicitada");
+
+      if (puedeEntregar(usuario.rol)) {
+        const pendientes = items.filter((r) => r.Estado === "Pendiente");
+        cont.innerHTML = `<p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Cola de pendientes</p>` +
+          (pendientes.length === 0
+            ? '<p style="font-size:13px;color:var(--gris);">No hay requisiciones pendientes.</p>'
+            : pendientes.map((r) => `
+              <div class="req-item">
+                <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Pendiente">Pendiente</span></div>
+                <p class="op">${r["Referencia"]} · ${r[cantSolHeader]} ${mod.unitLabel} · pidió ${r["Solicitó"]}</p>
+              </div>`).join(""));
+      } else if (usuario.rol === "produccion") {
+        const misReq = items.filter((r) => r["Solicitó"] === usuario.nombre)
+          .sort((a, b) => String(b.Fecha).localeCompare(String(a.Fecha)));
+        cont.innerHTML = `<p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Mis requisiciones</p>` +
+          (misReq.length === 0
+            ? '<p style="font-size:13px;color:var(--gris);">Todavía no has creado ninguna requisición.</p>'
+            : misReq.map((r) => `
+              <div class="req-item">
+                <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-${r.Estado}">${r.Estado}</span></div>
+                <p class="op">${r["Referencia"]} · ${r[cantSolHeader]} ${mod.unitLabel} · ${r.Fecha}</p>
+              </div>`).join(""));
+      }
+    }
+    cargarResumen();
   }
 </script>
 </body>

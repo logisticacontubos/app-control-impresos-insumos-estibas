@@ -20,6 +20,7 @@
     <form id="formNueva">
       <label id="labelItem">Ítem</label>
       <select id="selCodigo" required></select>
+      <p id="stockDisponible" style="font-size:12px;color:var(--gris);margin:-8px 0 12px;"></p>
       <label id="labelCantidad">Cantidad solicitada</label>
       <input type="number" id="inpCantidad" min="0" step="any" required>
       <button class="btn btn-primary" id="btnEnviar">Enviar a bodega</button>
@@ -39,16 +40,30 @@
 
     if (!puedeCrearRequisicion(usuario.rol)) window.location.href = "modulo.html?modulo=" + mod.key;
 
+    let itemsInv = [];
+    let stockHeader = "";
     async function cargarItems() {
       const invData = await apiGet("getInventario", { modulo: mod.key });
-      const items = invData.items || [];
-      const codigoHeader = buscarEncabezado(items[0], "Código");
-      const refHeader = buscarEncabezado(items[0], "Referencia");
+      itemsInv = invData.items || [];
+      const codigoHeader = buscarEncabezado(itemsInv[0], "Código");
+      const refHeader = buscarEncabezado(itemsInv[0], "Referencia");
+      stockHeader = buscarEncabezado(itemsInv[0], "Stock actual");
       const sel = document.getElementById("selCodigo");
-      sel.innerHTML = '<option value="">Selecciona…</option>' + items.map((it) =>
+      sel.innerHTML = '<option value="">Selecciona…</option>' + itemsInv.map((it) =>
         `<option value="${it[codigoHeader]}" data-ref="${it[refHeader]}">${it[refHeader]}</option>`).join("");
     }
     cargarItems();
+
+    document.getElementById("selCodigo").addEventListener("change", (e) => {
+      const codigoHeader = buscarEncabezado(itemsInv[0], "Código");
+      const item = itemsInv.find((it) => it[codigoHeader] === e.target.value);
+      const stockEl = document.getElementById("stockDisponible");
+      if (item && stockHeader && item[stockHeader] !== "" && item[stockHeader] !== undefined) {
+        stockEl.textContent = "Disponible en bodega: " + item[stockHeader] + " " + mod.unitLabel;
+      } else {
+        stockEl.textContent = "";
+      }
+    });
 
     document.getElementById("formNueva").addEventListener("submit", async (e) => {
       e.preventDefault();
