@@ -306,10 +306,19 @@ textarea{resize:vertical;}
 /* ===== Encabezado solo para impresión / PDF ===== */
 .solo-impresion{display:none;}
 @media print{
+  @page{ size: landscape; margin: 10mm; }
   .no-imprimir{display:none !important;}
   .solo-impresion{display:block;}
   body,.app{background:#fff;}
   .card,.card-stat,.req-item,.req-check{box-shadow:none;border:1px solid var(--borde);}
+  /* La app está pensada para celular (max-width:480px) — eso también se
+     aplicaba al imprimir, y por eso la tabla del reporte se veía cortada en
+     vez de usar todo el ancho de la hoja. Al imprimir, se libera ese límite. */
+  .app{max-width:none !important;}
+  main{padding:0 !important;}
+  #tablaImpresion{table-layout:fixed;width:100% !important;font-size:8px !important;}
+  #tablaImpresion th,#tablaImpresion td{padding:3px 4px !important;word-break:break-word;}
+  .solo-impresion{overflow:visible !important;}
 }
 .encabezado-pdf{
   display:flex;align-items:center;gap:14px;
