@@ -104,13 +104,21 @@ label{
 input[type=text],input[type=number],select,textarea{
   width:100%;
   padding:12px 14px;
-  border:none;
+  border:1.5px solid var(--borde);
   border-radius:12px;
   font-size:15px;
   margin-bottom:14px;
-  background:var(--fondo);
+  background:#fff;
   color:var(--texto);
   font-family:inherit;
+  box-shadow:0 2px 6px rgba(26,26,26,0.06);
+}
+input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{
+  outline:none;
+  border-color:var(--magenta);
+}
+input[type=text]::placeholder,input[type=number]::placeholder,textarea::placeholder{
+  color:var(--gris);
 }
 textarea{resize:vertical;}
 .btn{
@@ -216,6 +224,26 @@ textarea{resize:vertical;}
   padding:12px 14px;border-radius:var(--radius);margin-bottom:14px;
 }
 .loading{text-align:center;color:var(--gris);font-size:13px;padding:20px 0;}
+.loading-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(246,245,243,0.88);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  z-index:999;
+}
+.loading-overlay .spinner{
+  width:34px;height:34px;
+  border-radius:50%;
+  border:3px solid var(--borde);
+  border-top-color:var(--magenta);
+  animation:girar .8s linear infinite;
+}
+.loading-overlay .texto{font-size:13px;font-weight:600;color:var(--texto);}
+@keyframes girar{to{transform:rotate(360deg);}}
 .chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
 .chip{
   padding:10px;text-align:center;border-radius:10px;font-size:14px;font-weight:700;
