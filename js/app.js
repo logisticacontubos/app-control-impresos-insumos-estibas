@@ -187,6 +187,31 @@ function mostrarToast(mensaje, ms) {
   clearTimeout(el._timeout);
   el._timeout = setTimeout(() => { el.style.display = "none"; }, ms || 2200);
 }
+// Arma las líneas de detalle de una requisición (solicitado, entregado, quién entregó,
+// a quién, y devolución si aplica) — se usa igual en modulo.html ("Mis requisiciones")
+// y en bodega.html (cola y devoluciones), para que en cualquier parte de la app se vea
+// la trazabilidad completa, no solo lo que se pidió.
+function detalleRequisicion(r, mod) {
+  const cantSolHeader = buscarEncabezado(r, "Cantidad solicitada");
+  const cantEntHeader = buscarEncabezado(r, "Cantidad entregada");
+  const cantDevHeader = buscarEncabezado(r, "Cantidad devuelta");
+  const saldoHeader = buscarEncabezado(r, "Saldo neto");
+
+  const lineas = [];
+  lineas.push(`Solicitó ${r["Solicitó"]} · ${r[cantSolHeader] || 0} ${mod.unitLabel} pedidos`);
+
+  if (r.Estado === "Entregado" || r.Estado === "Cerrada") {
+    const cantEnt = r[cantEntHeader];
+    lineas.push(`Entregó ${r["Entregó (bodega)"] || "-"} · ${cantEnt !== undefined && cantEnt !== "" ? cantEnt : "0"} ${mod.unitLabel} a ${r["Entregado a (producción)"] || "-"}`);
+  }
+
+  if (mod.hasDevolucion && cantDevHeader && r[cantDevHeader] !== undefined && r[cantDevHeader] !== "" && Number(r[cantDevHeader]) > 0) {
+    lineas.push(`Devolvió ${r[cantDevHeader]} ${mod.unitLabel}${r[saldoHeader] !== undefined && r[saldoHeader] !== "" ? " · saldo neto " + r[saldoHeader] + " " + mod.unitLabel : ""}`);
+  }
+
+  return lineas.map((l) => `<p class="op">${l}</p>`).join("");
+}
+
 function buscarEncabezado(obj, prefijo) {
   return Object.keys(obj || {}).find((h) => h.toLowerCase().startsWith(prefijo.toLowerCase()));
 }
