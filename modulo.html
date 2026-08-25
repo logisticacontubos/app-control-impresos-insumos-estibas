@@ -40,6 +40,7 @@
       window.cambiar = function (e) {
         establecerEmpresaActiva(e);
         aplicarTema(e);
+        mostrarLogoEnHeader(e);
         document.getElementById("subModulo").textContent = e;
         render();
         cargarResumen();
