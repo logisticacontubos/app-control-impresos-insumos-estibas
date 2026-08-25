@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="modulo.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Inventario</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <div id="lista"></div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { mod } = ctx;
+    document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
+    document.getElementById("titulo").textContent = "Inventario";
+    document.getElementById("sub").textContent = mod.label;
+
+    async function cargar() {
+      const invData = await apiGet("getInventario", { modulo: mod.key });
+      const items = invData.items || [];
+      const codigoHeader = buscarEncabezado(items[0], "Código");
+      const refHeader = buscarEncabezado(items[0], "Referencia");
+      const stockHeader = buscarEncabezado(items[0], "Stock actual");
+      const optimoHeader = buscarEncabezado(items[0], "Óptimo");
+
+      document.getElementById("lista").innerHTML = items.length === 0
+        ? '<p style="font-size:13px;color:var(--gris);">Sin datos de inventario todavía.</p>'
+        : items.map((it) => {
+            const stock = Number(it[stockHeader]) || 0;
+            const optimo = Number(it[optimoHeader]) || 1;
+            const pct = Math.max(0, Math.min(100, (stock / optimo) * 100));
+            const estado = it["Estado"] || "";
+            return `
+              <div class="req-item">
+                <div class="fila">
+                  <span class="reqid" style="font-size:14px;">${it[refHeader]}</span>
+                  <span class="badge badge-${estado}">${estado}</span>
+                </div>
+                <div class="progreso" style="margin-top:8px;">
+                  <div class="barra gauge-bar"><div class="fill gauge-fill" style="width:${pct}%;"></div></div>
+                  <span class="txt">${stock} ${mod.unitLabel}</span>
+                </div>
+              </div>`;
+          }).join("");
+    }
+    cargar();
+  }
+</script>
+</body>
+</html>

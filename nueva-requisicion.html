@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nueva requisición · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="modulo.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Nueva requisición</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <div class="error-msg" id="formError"></div>
+    <form id="formNueva">
+      <label id="labelItem">Ítem</label>
+      <select id="selCodigo" required></select>
+      <label id="labelCantidad">Cantidad solicitada</label>
+      <input type="number" id="inpCantidad" min="0" step="any" required>
+      <button class="btn btn-primary" id="btnEnviar">Enviar a bodega</button>
+    </form>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { usuario, mod } = ctx;
+    document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
+    document.getElementById("titulo").textContent = "Nueva requisición";
+    document.getElementById("sub").textContent = mod.label;
+    document.getElementById("labelItem").textContent = mod.itemLabel;
+    document.getElementById("labelCantidad").textContent = "Cantidad solicitada (" + mod.unitLabel + ")";
+
+    if (!puedeCrearRequisicion(usuario.rol)) window.location.href = "modulo.html?modulo=" + mod.key;
+
+    async function cargarItems() {
+      const invData = await apiGet("getInventario", { modulo: mod.key });
+      const items = invData.items || [];
+      const codigoHeader = buscarEncabezado(items[0], "Código");
+      const refHeader = buscarEncabezado(items[0], "Referencia");
+      const sel = document.getElementById("selCodigo");
+      sel.innerHTML = '<option value="">Selecciona…</option>' + items.map((it) =>
+        `<option value="${it[codigoHeader]}" data-ref="${it[refHeader]}">${it[refHeader]}</option>`).join("");
+    }
+    cargarItems();
+
+    document.getElementById("formNueva").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      ocultarError("formError");
+      const sel = document.getElementById("selCodigo");
+      const codigo = sel.value;
+      const referencia = sel.selectedOptions[0] ? sel.selectedOptions[0].dataset.ref : "";
+      const cantidad = document.getElementById("inpCantidad").value;
+      const btn = document.getElementById("btnEnviar");
+      btn.disabled = true;
+      try {
+        await apiPost("crearRequisicion", {
+          modulo: mod.key, codigo, referencia, cantidad,
+          solicito: usuario.nombre, cargo: usuario.cargo,
+        });
+        window.location.href = "modulo.html?modulo=" + mod.key;
+      } catch (err) {
+        mostrarError("formError", err.message);
+        btn.disabled = false;
+      }
+    });
+  }
+</script>
+</body>
+</html>

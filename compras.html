@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compras · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="modulo.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Compras</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <div id="lista"></div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { usuario, mod } = ctx;
+    document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
+    document.getElementById("titulo").textContent = "Vista de compras";
+    document.getElementById("sub").textContent = mod.label;
+    const editable = puedeEditarUmbrales(usuario.rol);
+
+    async function cargar() {
+      const invData = await apiGet("getInventario", { modulo: mod.key });
+      const items = invData.items || [];
+      const codigoHeader = buscarEncabezado(items[0], "Código");
+      const refHeader = buscarEncabezado(items[0], "Referencia");
+      const stockHeader = buscarEncabezado(items[0], "Stock actual");
+      const sugeridoHeader = buscarEncabezado(items[0], "Sugerido");
+
+      document.getElementById("lista").innerHTML = items.length === 0
+        ? '<p style="font-size:13px;color:var(--gris);">Sin datos de inventario todavía.</p>'
+        : items.map((it) => {
+            const campos = ["Óptimo", "Ajustado", "Crítico"].map((f) => {
+              const h = buscarEncabezado(it, f);
+              return editable
+                ? `<div><label style="margin-bottom:2px;">${f}</label><input type="number" value="${it[h]}" data-codigo="${it[codigoHeader]}" data-campo="${f.toLowerCase()}" class="inp-umbral umbral-input"></div>`
+                : `<div><label style="margin-bottom:2px;">${f}</label><span>${it[h]}</span></div>`;
+            }).join("");
+            return `
+              <div class="req-item">
+                <div class="fila">
+                  <span class="reqid" style="font-size:14px;">${it[refHeader]}</span>
+                  <span class="badge badge-${it["Estado"]}">${it["Estado"]}</span>
+                </div>
+                <p class="op">Stock: ${it[stockHeader]} ${mod.unitLabel} · Sugerido a pedir: ${it[sugeridoHeader]} ${mod.unitLabel}</p>
+                <div style="display:flex; gap:14px; margin-top:6px;">${campos}</div>
+              </div>`;
+          }).join("");
+
+      document.querySelectorAll(".inp-umbral").forEach((inp) => {
+        inp.addEventListener("blur", async () => {
+          const body = { modulo: mod.key, codigo: inp.dataset.codigo };
+          body[inp.dataset.campo] = inp.value;
+          try { await apiPost("actualizarUmbrales", body); } catch (err) { alert(err.message); }
+        });
+      });
+    }
+    cargar();
+  }
+</script>
+</body>
+</html>

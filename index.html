@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <main style="padding-top:48px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:8px;">
+        <img src="assets/logo-contubos.png" alt="Contubos" style="height:30px;width:auto;display:block;">
+        <div style="width:1px;height:26px;background:#DADADA;"></div>
+        <img src="assets/logo-tecnipapel.png" alt="Tecnipapel" style="height:30px;width:auto;display:block;">
+      </div>
+      <p style="font-size:12px;color:var(--gris);letter-spacing:1px;margin:0;">CONTROL DE IMPRESOS - INSUMOS - ESTIBAS</p>
+      <p style="font-size:11px;color:var(--gris);margin:2px 0 0;">Contubos y Tecnipapel</p>
+    </div>
+
+    <p style="font-size:13px;color:var(--gris);text-align:center;margin:0 0 6px;">Ingresa tu PIN</p>
+    <div class="pin-dots" id="pinDots">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="loading" id="loading" style="display:none;">Verificando...</div>
+    <div class="pin-pad" id="pinPad">
+      <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button>
+      <button data-n="4">4</button><button data-n="5">5</button><button data-n="6">6</button>
+      <button data-n="7">7</button><button data-n="8">8</button><button data-n="9">9</button>
+      <button data-borrar style="background:transparent;"></button>
+      <button data-n="0">0</button>
+      <button data-limpiar style="background:transparent;color:var(--gris);font-size:13px;">C</button>
+    </div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+let pin = "";
+const MAX_LEN = 4;
+
+function actualizarDots() {
+  const dots = document.querySelectorAll("#pinDots span");
+  dots.forEach((d, i) => d.classList.toggle("filled", i < pin.length));
+}
+
+async function intentarLogin() {
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("pinPad").style.pointerEvents = "none";
+  try {
+    const usuario = await apiPost("login", { pin: pin });
+    guardarSesion(usuario);
+    window.location.href = "home.html";
+  } catch (err) {
+    mostrarError("errorMsg", "PIN incorrecto. Intenta de nuevo.");
+    pin = "";
+    actualizarDots();
+  } finally {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("pinPad").style.pointerEvents = "auto";
+  }
+}
+
+function agregarDigito(digito) {
+  ocultarError("errorMsg");
+  if (pin.length < MAX_LEN) pin += digito;
+  actualizarDots();
+  if (pin.length === MAX_LEN) intentarLogin();
+}
+function borrarDigito() {
+  ocultarError("errorMsg");
+  pin = pin.slice(0, -1);
+  actualizarDots();
+}
+function limpiarPin() {
+  ocultarError("errorMsg");
+  pin = "";
+  actualizarDots();
+}
+
+document.getElementById("pinPad").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  if (btn.dataset.n !== undefined) agregarDigito(btn.dataset.n);
+  else if (btn.hasAttribute("data-borrar")) borrarDigito();
+  else if (btn.hasAttribute("data-limpiar")) limpiarPin();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key >= "0" && e.key <= "9") agregarDigito(e.key);
+  else if (e.key === "Backspace") borrarDigito();
+  else if (e.key === "Escape") limpiarPin();
+});
+
+if (obtenerSesion()) window.location.href = "home.html";
+</script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bodega · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="modulo.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Bodega</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <p style="font-size:12px;color:var(--gris);margin:0 0 8px;">Cola de pendientes</p>
+    <div id="pendientes"></div>
+
+    <div id="seccionDevoluciones" style="display:none;">
+      <p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Registrar devolución</p>
+      <div id="entregadas"></div>
+    </div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { usuario, mod } = ctx;
+    document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
+    document.getElementById("titulo").textContent = "Bodega";
+    document.getElementById("sub").textContent = mod.label;
+
+    async function cargar() {
+      const reqData = await apiGet("getRequisiciones", { modulo: mod.key });
+      const items = reqData.items || [];
+      const pendientes = items.filter((r) => r.Estado === "Pendiente");
+      const entregadas = mod.hasDevolucion ? items.filter((r) => r.Estado === "Entregado") : [];
+
+      const contPend = document.getElementById("pendientes");
+      contPend.innerHTML = pendientes.length === 0
+        ? '<p style="font-size:13px;color:var(--gris);">No hay requisiciones pendientes.</p>'
+        : pendientes.map((r) => {
+            const cantHeader = buscarEncabezado(r, "Cantidad solicitada");
+            return `
+            <div class="req-item">
+              <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Pendiente">Pendiente</span></div>
+              <p class="op">${r["Referencia"]} · ${r[cantHeader]} ${mod.unitLabel} · pidió ${r["Solicitó"]}</p>
+              <form onsubmit="return entregar(event, '${r.ID}')">
+                <input type="number" placeholder="Cantidad entregada (${mod.unitLabel})" class="inp-cant" required>
+                <input type="text" placeholder="Operario de producción que recibe" class="inp-recibe" required>
+                <button class="btn btn-primary">Entregar</button>
+              </form>
+            </div>`;
+          }).join("");
+
+      if (mod.hasDevolucion) {
+        document.getElementById("seccionDevoluciones").style.display = "";
+        const contEnt = document.getElementById("entregadas");
+        contEnt.innerHTML = entregadas.length === 0
+          ? '<p style="font-size:13px;color:var(--gris);">No hay requisiciones entregadas.</p>'
+          : entregadas.map((r) => `
+            <div class="req-item">
+              <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Entregado">Entregado</span></div>
+              <p class="op">${r["Referencia"]}</p>
+              <form onsubmit="return devolver(event, '${r.ID}')">
+                <input type="number" placeholder="Kg devuelto" class="inp-cant" required>
+                <input type="text" placeholder="Quién devuelve (producción)" class="inp-quien" required>
+                <button class="btn btn-primary">Registrar devolución</button>
+              </form>
+            </div>`).join("");
+      }
+    }
+    cargar();
+
+    window.entregar = async function (e, id) {
+      e.preventDefault();
+      const form = e.target;
+      const cantidadEntregada = form.querySelector(".inp-cant").value;
+      const entregadoA = form.querySelector(".inp-recibe").value;
+      try {
+        await apiPost("entregarRequisicion", { modulo: mod.key, id, cantidadEntregada, entregadoA, entrego: usuario.nombre });
+        cargar();
+      } catch (err) { alert(err.message); }
+      return false;
+    };
+
+    window.devolver = async function (e, id) {
+      e.preventDefault();
+      const form = e.target;
+      const cantidadDevuelta = form.querySelector(".inp-cant").value;
+      const quienDevuelve = form.querySelector(".inp-quien").value;
+      try {
+        await apiPost("devolverRequisicion", { modulo: mod.key, id, cantidadDevuelta, quienDevuelve, recibio: usuario.nombre });
+        cargar();
+      } catch (err) { alert(err.message); }
+      return false;
+    };
+  }
+</script>
+</body>
+</html>

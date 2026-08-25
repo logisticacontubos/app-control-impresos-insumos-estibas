@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Módulo · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" href="home.html">&#8592;</a>
+    <div>
+      <h1 id="tituloModulo">Módulo</h1>
+      <p class="sub" id="subModulo"></p>
+    </div>
+  </header>
+  <main>
+    <div id="selectorEmpresa" class="chip-row" style="display:none;"></div>
+    <div id="acciones"></div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { usuario, mod, empresas, empresaActual } = ctx;
+    document.getElementById("tituloModulo").textContent = mod.label;
+    document.getElementById("subModulo").textContent = empresaActual;
+
+    if (empresas.length > 1) {
+      const cont = document.getElementById("selectorEmpresa");
+      cont.style.display = "flex";
+      function render() {
+        cont.innerHTML = empresas.map((e) =>
+          `<span class="chip ${e === obtenerEmpresaActiva() ? "on" : ""}" onclick="cambiar('${e}')">${e}</span>`
+        ).join("");
+      }
+      window.cambiar = function (e) {
+        establecerEmpresaActiva(e);
+        aplicarTema(e);
+        document.getElementById("subModulo").textContent = e;
+        render();
+      };
+      render();
+    }
+
+    const acciones = document.getElementById("acciones");
+    let html = "";
+    if (puedeCrearRequisicion(usuario.rol)) {
+      html += `<a class="accion" href="nueva-requisicion.html?modulo=${mod.key}"><span class="icono">+</span>Nueva requisición</a>`;
+    }
+    if (puedeEntregar(usuario.rol)) {
+      html += `<a class="accion" href="bodega.html?modulo=${mod.key}"><span class="icono">&#128230;</span>${mod.hasDevolucion ? "Entregar y devoluciones" : "Entregar"}</a>`;
+    }
+    html += `<a class="accion" href="inventario.html?modulo=${mod.key}"><span class="icono">&#128202;</span>Ver inventario</a>`;
+    if (usuario.rol === "compras" || usuario.rol === "bodega" || usuario.rol === "admin") {
+      html += `<a class="accion" href="compras.html?modulo=${mod.key}"><span class="icono">&#128181;</span>Vista de compras</a>`;
+    }
+    acciones.innerHTML = html;
+  }
+</script>
+</body>
+</html>
