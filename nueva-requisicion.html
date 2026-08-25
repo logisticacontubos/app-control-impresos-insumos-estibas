@@ -23,6 +23,10 @@
       <p id="stockDisponible" style="font-size:12px;color:var(--gris);margin:-8px 0 12px;"></p>
       <label id="labelCantidad">Cantidad solicitada</label>
       <input type="number" id="inpCantidad" min="0" step="any" required>
+      <div id="grupoMotivo" style="display:none;">
+        <label>Motivo / para qué se necesita</label>
+        <textarea id="inpMotivo" rows="3" placeholder="Ej: Se va a cortar familia, se necesitan 40 estibas 115x115"></textarea>
+      </div>
       <button class="btn btn-primary" id="btnEnviar">Enviar a bodega</button>
     </form>
   </main>
@@ -39,6 +43,16 @@
     document.getElementById("labelCantidad").textContent = "Cantidad solicitada (" + mod.unitLabel + ")";
 
     if (!puedeCrearRequisicion(usuario.rol)) window.location.href = "modulo.html?modulo=" + mod.key;
+
+    // En Estibas el motivo/uso es obligatorio (ej: "se va a cortar familia,
+    // se necesitan 40 estibas 115x115"), para que quede claro a qué necesidad
+    // va ligado el pedido.
+    const esEstibas = mod.key === "estibas";
+    const inpMotivo = document.getElementById("inpMotivo");
+    if (esEstibas) {
+      document.getElementById("grupoMotivo").style.display = "block";
+      inpMotivo.required = true;
+    }
 
     let itemsInv = [];
     let stockHeader = "";
@@ -72,11 +86,16 @@
       const codigo = sel.value;
       const referencia = sel.selectedOptions[0] ? sel.selectedOptions[0].dataset.ref : "";
       const cantidad = document.getElementById("inpCantidad").value;
+      const motivo = inpMotivo ? inpMotivo.value.trim() : "";
+      if (esEstibas && !motivo) {
+        mostrarError("formError", "El motivo es obligatorio para pedidos de estibas.");
+        return;
+      }
       const btn = document.getElementById("btnEnviar");
       btn.disabled = true;
       try {
         await apiPost("crearRequisicion", {
-          modulo: mod.key, codigo, referencia, cantidad,
+          modulo: mod.key, codigo, referencia, cantidad, motivo,
           solicito: usuario.nombre, cargo: usuario.cargo,
         });
         window.location.href = "modulo.html?modulo=" + mod.key;
