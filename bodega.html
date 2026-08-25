@@ -43,19 +43,17 @@
       const contPend = document.getElementById("pendientes");
       contPend.innerHTML = pendientes.length === 0
         ? '<p style="font-size:13px;color:var(--gris);">No hay requisiciones pendientes.</p>'
-        : pendientes.map((r) => {
-            const cantHeader = buscarEncabezado(r, "Cantidad solicitada");
-            return `
+        : pendientes.map((r) => `
             <div class="req-item">
               <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Pendiente">Pendiente</span></div>
-              <p class="op">${r["Referencia"]} · ${r[cantHeader]} ${mod.unitLabel} · pidió ${r["Solicitó"]}</p>
+              <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
+              ${detalleRequisicion(r, mod)}
               <form onsubmit="return entregar(event, '${r.ID}')">
                 <input type="number" placeholder="Cantidad entregada (${mod.unitLabel})" class="inp-cant" required>
                 <input type="text" placeholder="Operario de producción que recibe" class="inp-recibe" required>
                 <button class="btn btn-primary">Entregar</button>
               </form>
-            </div>`;
-          }).join("");
+            </div>`).join("");
 
       if (mod.hasDevolucion) {
         document.getElementById("seccionDevoluciones").style.display = "";
@@ -65,7 +63,8 @@
           : entregadas.map((r) => `
             <div class="req-item">
               <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Entregado">Entregado</span></div>
-              <p class="op">${r["Referencia"]}</p>
+              <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
+              ${detalleRequisicion(r, mod)}
               <form onsubmit="return devolver(event, '${r.ID}')">
                 <input type="number" placeholder="Kg devuelto" class="inp-cant" required>
                 <input type="text" placeholder="Quién devuelve (producción)" class="inp-quien" required>

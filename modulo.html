@@ -81,7 +81,8 @@
             : pendientes.map((r) => `
               <div class="req-item">
                 <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Pendiente">Pendiente</span></div>
-                <p class="op">${r["Referencia"]} · ${r[cantSolHeader]} ${mod.unitLabel} · pidió ${r["Solicitó"]}</p>
+                <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
+                ${detalleRequisicion(r, mod)}
               </div>`).join(""));
       } else if (usuario.rol === "produccion") {
         const misReq = items.filter((r) => r["Solicitó"] === usuario.nombre)
@@ -92,7 +93,8 @@
             : misReq.map((r) => `
               <div class="req-item">
                 <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-${r.Estado}">${r.Estado}</span></div>
-                <p class="op">${r["Referencia"]} · ${r[cantSolHeader]} ${mod.unitLabel} · ${r.Fecha}</p>
+                <p class="op" style="font-weight:600;">${r["Referencia"]} · ${r.Fecha}</p>
+                ${detalleRequisicion(r, mod)}
               </div>`).join(""));
       }
     }
