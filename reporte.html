@@ -157,7 +157,7 @@
           <label class="req-check">
             <input type="checkbox" class="chkReq" data-id="${r.id}" ${seleccionadas.has(r.id) ? "checked" : ""}>
             <div class="info">
-              <div class="fila"><span>${r.id} · ${r.referencia}</span><span class="badge badge-${r.estado}">${r.estado}</span></div>
+              <div class="fila"><span>${r.id} · ${r.referencia}</span><span class="badge badge-${claseEstado(r.estado)}">${r.estado}</span></div>
               <p class="op">Solicitó ${r.solicito} · ${r.cantidadSolicitada} ${ultimoData.unitLabel} pedidos · ${r.fecha}</p>
               ${r.motivo ? `<p class="op">Motivo: ${r.motivo}</p>` : ""}
             </div>

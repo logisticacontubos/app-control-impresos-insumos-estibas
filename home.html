@@ -124,7 +124,7 @@ if (usuario) {
 
       const resultados = await Promise.all(modulosAcceso.map(async (m) => {
         const reqData = await apiGet("getRequisiciones", { modulo: m.key });
-        const pendientes = (reqData.items || []).filter((r) => r.Estado === "Pendiente");
+        const pendientes = (reqData.items || []).filter((r) => r.Estado === "Pendiente" || r.Estado === "Entregado parcial");
         return pendientes.map((r) => ({ r, mod: m }));
       }));
       pendientesPorModulo = resultados.flat();
