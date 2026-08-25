@@ -63,6 +63,18 @@ header.topbar .sub{
   color:var(--gris);
   margin:2px 0 0;
 }
+header.topbar .userchip{
+  margin-left:auto;
+  text-align:right;
+  font-size:11px;
+  color:var(--gris);
+  line-height:1.3;
+}
+header.topbar .userchip .nombre{
+  font-weight:700;
+  color:var(--texto);
+  font-size:12px;
+}
 main{
   flex:1;
   padding:12px 20px 24px;
