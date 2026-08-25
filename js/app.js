@@ -85,20 +85,63 @@ function vistasParaRol(rol) {
 }
 
 // ==========================================================
+// INDICADOR DE "CARGANDO / PROCESANDO" GLOBAL
+// Se muestra automáticamente en CADA llamada a la API (apiGet/apiPost),
+// de principio a fin: desde el ingreso del PIN hasta cualquier otra
+// acción (crear requisición, entregar, devolver, umbrales, reportes, etc.),
+// para que la interfaz nunca se sienta "congelada" entre el click y el resultado.
+// ==========================================================
+const MENSAJES_CARGA = {
+  login: "Verificando...",
+  crearRequisicion: "Enviando requisición...",
+  entregarRequisicion: "Registrando entrega...",
+  devolverRequisicion: "Registrando devolución...",
+  actualizarUmbrales: "Guardando cambios...",
+  getInventario: "Cargando inventario...",
+  getRequisiciones: "Cargando requisiciones...",
+  getReporte: "Generando reporte...",
+};
+let _cargasActivas = 0;
+function mostrarCargando(mensaje) {
+  _cargasActivas++;
+  let el = document.getElementById("loadingOverlay");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "loadingOverlay";
+    el.className = "loading-overlay";
+    el.innerHTML = '<div class="spinner"></div><div class="texto"></div>';
+    document.body.appendChild(el);
+  }
+  el.querySelector(".texto").textContent = mensaje || "Procesando...";
+  el.style.display = "flex";
+}
+function ocultarCargando() {
+  _cargasActivas = Math.max(0, _cargasActivas - 1);
+  if (_cargasActivas > 0) return;
+  const el = document.getElementById("loadingOverlay");
+  if (el) el.style.display = "none";
+}
+
+// ==========================================================
 // LLAMADAS A LA API (Apps Script) — mismo patrón que la app de rollos
 // ==========================================================
 async function apiPost(accion, datos) {
   const empresaActiva = obtenerEmpresaActiva();
   const body = Object.assign({ accion: accion }, datos);
   if (empresaActiva && body.empresa === undefined) body.empresa = empresaActiva;
-  const resp = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(body),
-  });
-  const json = await resp.json();
-  if (!json.ok) throw new Error(json.error || "Error desconocido");
-  return json.data;
+  mostrarCargando(MENSAJES_CARGA[accion] || "Procesando...");
+  try {
+    const resp = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(body),
+    });
+    const json = await resp.json();
+    if (!json.ok) throw new Error(json.error || "Error desconocido");
+    return json.data;
+  } finally {
+    ocultarCargando();
+  }
 }
 
 async function apiGet(accion, params) {
@@ -106,10 +149,15 @@ async function apiGet(accion, params) {
   const base = Object.assign({ accion: accion }, params || {});
   if (empresaActiva && base.empresa === undefined) base.empresa = empresaActiva;
   const qs = new URLSearchParams(base);
-  const resp = await fetch(API_URL + "?" + qs.toString());
-  const json = await resp.json();
-  if (!json.ok) throw new Error(json.error || "Error desconocido");
-  return json.data;
+  mostrarCargando(MENSAJES_CARGA[accion] || "Cargando...");
+  try {
+    const resp = await fetch(API_URL + "?" + qs.toString());
+    const json = await resp.json();
+    if (!json.ok) throw new Error(json.error || "Error desconocido");
+    return json.data;
+  } finally {
+    ocultarCargando();
+  }
 }
 
 // ==========================================================
