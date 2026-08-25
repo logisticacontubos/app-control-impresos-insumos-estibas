@@ -142,8 +142,21 @@ function requiereModulo() {
   if (!empresaActual || !empresas.includes(empresaActual)) empresaActual = empresas[0];
   establecerEmpresaActiva(empresaActual);
   aplicarTema(empresaActual);
+  mostrarUsuarioEnHeader(usuario);
 
   return { usuario, mod, empresas, empresaActual };
+}
+
+// Pone el nombre y cargo/rol de quien está conectado en la esquina del header,
+// en TODAS las pantallas de módulo (para que siempre se sepa con qué usuario
+// se está trabajando, sin tener que volver a home.html a revisarlo).
+function mostrarUsuarioEnHeader(usuario) {
+  const header = document.querySelector("header.topbar");
+  if (!header || header.querySelector(".userchip")) return;
+  const chip = document.createElement("div");
+  chip.className = "userchip";
+  chip.innerHTML = `<div class="nombre">${usuario.nombre}</div><div class="rol">${usuario.cargo || usuario.rol}</div>`;
+  header.appendChild(chip);
 }
 
 // ==========================================================
