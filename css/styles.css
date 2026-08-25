@@ -237,7 +237,7 @@ textarea{resize:vertical;}
   border-radius:20px;
 }
 .badge-Óptimo,.badge-Optimo,.badge-Entregado{background:var(--verde-fondo);color:var(--verde);}
-.badge-Ajustado,.badge-Pendiente{background:var(--ambar-fondo);color:var(--ambar);}
+.badge-Ajustado,.badge-Pendiente,.badge-Entregado-parcial{background:var(--ambar-fondo);color:var(--ambar);}
 .badge-Crítico,.badge-Critico,.badge-Cero{background:var(--rojo-fondo);color:var(--rojo);}
 .error-msg{
   background:var(--rojo-fondo);color:var(--rojo);font-size:13px;
