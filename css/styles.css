@@ -253,3 +253,45 @@ textarea{resize:vertical;}
 .gauge-bar{height:8px;border-radius:4px;background:var(--fondo);overflow:hidden;}
 .gauge-fill{height:100%;border-radius:4px;background:var(--magenta);}
 .umbral-input{width:64px;padding:6px 8px;margin:0;font-size:13px;border-radius:8px;border:1px solid var(--borde);}
+
+/* ===== Selección de requisiciones en Reporte y KPI's ===== */
+.req-check{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  background:#fff;
+  border-radius:12px;
+  padding:12px 14px;
+  margin-bottom:8px;
+  box-shadow:0 4px 12px rgba(26,26,26,0.1);
+}
+.req-check input[type=checkbox]{
+  margin-top:3px;
+  width:18px;height:18px;
+  accent-color:var(--magenta);
+  flex-shrink:0;
+}
+.req-check .info{flex:1;}
+.req-check .info .fila{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:700;}
+.req-check .info .op{margin:2px 0 0;}
+.link-mini{
+  font-size:12px;font-weight:700;color:var(--magenta);
+  background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;
+}
+
+/* ===== Encabezado solo para impresión / PDF ===== */
+.solo-impresion{display:none;}
+@media print{
+  .no-imprimir{display:none !important;}
+  .solo-impresion{display:block;}
+  body,.app{background:#fff;}
+  .card,.card-stat,.req-item,.req-check{box-shadow:none;border:1px solid var(--borde);}
+}
+.encabezado-pdf{
+  display:flex;align-items:center;gap:14px;
+  padding-bottom:14px;margin-bottom:14px;
+  border-bottom:3px solid var(--magenta);
+}
+.encabezado-pdf img{height:36px;width:auto;}
+.encabezado-pdf .txt h2{margin:0;font-size:18px;color:var(--magenta);}
+.encabezado-pdf .txt p{margin:2px 0 0;font-size:12px;color:var(--gris);}
