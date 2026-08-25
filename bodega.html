@@ -56,7 +56,7 @@
               <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
               ${detalleRequisicion(r, mod)}
               <form onsubmit="return entregar(event, '${r.ID}')">
-                <input type="number" placeholder="Cantidad entregada (${mod.unitLabel})${r.Estado === "Entregado parcial" ? " · faltan " + saldo : ""}" class="inp-cant" required>
+                <input type="number" placeholder="Cantidad entregada (${mod.unitLabel})${r.Estado === "Entregado parcial" ? " · faltan " + saldo : ""}" class="inp-cant" step="0.01" min="0" required>
                 <input type="text" placeholder="Operario de producción que recibe" class="inp-recibe" required>
                 <button class="btn btn-primary">Entregar</button>
               </form>
@@ -74,7 +74,7 @@
               <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
               ${detalleRequisicion(r, mod)}
               <form onsubmit="return devolver(event, '${r.ID}')">
-                <input type="number" placeholder="Kg devuelto" class="inp-cant" required>
+                <input type="number" placeholder="Kg devuelto" class="inp-cant" step="0.01" min="0" required>
                 <input type="text" placeholder="Quién devuelve (producción)" class="inp-quien" required>
                 <button class="btn btn-primary">Registrar devolución</button>
               </form>
