@@ -24,7 +24,6 @@
       <span></span><span></span><span></span><span></span>
     </div>
     <div class="error-msg" id="errorMsg"></div>
-    <div class="loading" id="loading" style="display:none;">Verificando...</div>
     <div class="pin-pad" id="pinPad">
       <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button>
       <button data-n="4">4</button><button data-n="5">5</button><button data-n="6">6</button>
@@ -46,8 +45,6 @@ function actualizarDots() {
 }
 
 async function intentarLogin() {
-  document.getElementById("loading").style.display = "block";
-  document.getElementById("pinPad").style.pointerEvents = "none";
   try {
     const usuario = await apiPost("login", { pin: pin });
     guardarSesion(usuario);
@@ -56,9 +53,6 @@ async function intentarLogin() {
     mostrarError("errorMsg", "PIN incorrecto. Intenta de nuevo.");
     pin = "";
     actualizarDots();
-  } finally {
-    document.getElementById("loading").style.display = "none";
-    document.getElementById("pinPad").style.pointerEvents = "auto";
   }
 }
 
