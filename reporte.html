@@ -17,6 +17,14 @@
   </header>
   <main>
     <div class="card no-imprimir">
+      <label>Rango rápido</label>
+      <div class="chip-row" id="chipsRango">
+        <span class="chip" data-rango="hoy">Hoy</span>
+        <span class="chip" data-rango="ayer">Ayer</span>
+        <span class="chip" data-rango="semana">Semana</span>
+        <span class="chip" data-rango="mes">Mes</span>
+        <span class="chip" data-rango="todo">Todo</span>
+      </div>
       <label>Desde</label>
       <input type="date" id="inpDesde">
       <label>Hasta</label>
@@ -91,12 +99,47 @@
     document.getElementById("logoPdf").src = empresaActual === "Tecnipapel" ? "assets/logo-tecnipapel.png" : "assets/logo-contubos.png";
     document.getElementById("tituloPdf").textContent = "Reporte y KPI's · " + mod.label;
 
-    // Por defecto, últimos 30 días
-    const hoy = new Date();
-    const hace30 = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000);
     function fmt(d) { return d.toISOString().slice(0, 10); }
-    document.getElementById("inpHasta").value = fmt(hoy);
-    document.getElementById("inpDesde").value = fmt(hace30);
+
+    // Rangos rápidos (como en la app de rollos): Hoy / Ayer / Semana / Mes / Todo.
+    // "Todo" deja las fechas vacías para que el backend no filtre por fecha.
+    function aplicarRango(rango) {
+      const hoy = new Date();
+      let desde, hasta;
+      if (rango === "hoy") {
+        desde = hasta = hoy;
+      } else if (rango === "ayer") {
+        const ayer = new Date(hoy.getTime() - 24 * 60 * 60 * 1000);
+        desde = hasta = ayer;
+      } else if (rango === "semana") {
+        desde = new Date(hoy.getTime() - 6 * 24 * 60 * 60 * 1000);
+        hasta = hoy;
+      } else if (rango === "mes") {
+        desde = new Date(hoy.getTime() - 29 * 24 * 60 * 60 * 1000);
+        hasta = hoy;
+      } else {
+        // "todo": sin filtro de fecha
+        document.getElementById("inpDesde").value = "";
+        document.getElementById("inpHasta").value = "";
+        document.querySelectorAll("#chipsRango .chip").forEach((c) => c.classList.toggle("on", c.dataset.rango === rango));
+        generar();
+        return;
+      }
+      document.getElementById("inpDesde").value = fmt(desde);
+      document.getElementById("inpHasta").value = fmt(hasta);
+      document.querySelectorAll("#chipsRango .chip").forEach((c) => c.classList.toggle("on", c.dataset.rango === rango));
+      generar();
+    }
+    document.getElementById("chipsRango").addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (chip) aplicarRango(chip.dataset.rango);
+    });
+    // Si el usuario cambia las fechas a mano, ningún chip queda marcado como activo.
+    ["inpDesde", "inpHasta"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", () => {
+        document.querySelectorAll("#chipsRango .chip").forEach((c) => c.classList.remove("on"));
+      });
+    });
 
     let ultimoData = null;
     let seleccionadas = new Set();
@@ -233,7 +276,8 @@
     });
 
     document.getElementById("btnGenerar").addEventListener("click", generar);
-    generar();
+    // Por defecto, últimos 30 días ("Mes")
+    aplicarRango("mes");
   }
 </script>
 </body>
