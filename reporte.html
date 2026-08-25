@@ -48,41 +48,68 @@
         <button class="btn btn-secondary" id="btnPdf">Descargar PDF</button>
       </div>
 
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-        <div class="card-stat">
-          <p class="label">Consumido en el período</p>
-          <p class="value" id="statConsumo" style="color:var(--magenta);">-</p>
-        </div>
-        <div class="card-stat">
-          <p class="label">Requisiciones entregadas</p>
-          <p class="value" id="statEntregadas">-</p>
-        </div>
-        <div class="card-stat">
-          <p class="label">Ítems en crítico</p>
-          <p class="value" id="statCritico" style="color:var(--rojo);">-</p>
-        </div>
-        <div class="card-stat">
-          <p class="label">Ítems en cero</p>
-          <p class="value" id="statCero" style="color:var(--rojo);">-</p>
-        </div>
+      <!-- Tabla de trazabilidad para imprimir/PDF: solo lo marcado con check en
+           "Requisiciones del período" — quién pidió, quién entregó, a quién,
+           faltante/sobrante y devolución. No sale el inventario/stock aquí. -->
+      <div class="solo-impresion" style="overflow-x:auto;">
+        <table id="tablaImpresion" style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead>
+            <tr style="background:var(--fondo);text-align:left;">
+              <th style="padding:6px 8px;border:1px solid var(--borde);">ID</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Ítem</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Solicitó</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Fecha / hora sol.</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Cant. sol.</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Entregó</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Entregado a</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Fecha / hora ent.</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Cant. ent.</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Diferencia</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Devolución</th>
+              <th style="padding:6px 8px;border:1px solid var(--borde);">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyImpresion"></tbody>
+        </table>
       </div>
 
-      <p style="font-size:12px;color:var(--gris);margin:16px 0 8px;">Consumo por ítem en el período</p>
-      <div id="listaConsumo"></div>
+      <div class="no-imprimir">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+          <div class="card-stat">
+            <p class="label">Consumido en el período</p>
+            <p class="value" id="statConsumo" style="color:var(--magenta);">-</p>
+          </div>
+          <div class="card-stat">
+            <p class="label">Requisiciones entregadas</p>
+            <p class="value" id="statEntregadas">-</p>
+          </div>
+          <div class="card-stat">
+            <p class="label">Ítems en crítico</p>
+            <p class="value" id="statCritico" style="color:var(--rojo);">-</p>
+          </div>
+          <div class="card-stat">
+            <p class="label">Ítems en cero</p>
+            <p class="value" id="statCero" style="color:var(--rojo);">-</p>
+          </div>
+        </div>
 
-      <p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Inventario actual</p>
-      <div id="listaInventario"></div>
+        <p style="font-size:12px;color:var(--gris);margin:16px 0 8px;">Consumo por ítem en el período</p>
+        <div id="listaConsumo"></div>
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px;">
+        <p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Inventario actual</p>
+        <div id="listaInventario"></div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px;" class="no-imprimir">
         <p style="font-size:12px;color:var(--gris);margin:0;">Requisiciones del período <span id="contadorSel"></span></p>
-        <div class="no-imprimir">
+        <div>
           <button class="link-mini" id="btnTodas">Todas</button>
           &nbsp;·&nbsp;
           <button class="link-mini" id="btnNinguna">Ninguna</button>
         </div>
       </div>
-      <p style="font-size:12px;color:var(--gris);margin:-4px 0 10px;" class="no-imprimir">Marca las que quieras incluir en el detalle del Excel/PDF descargado.</p>
-      <div id="listaRequisiciones"></div>
+      <p style="font-size:12px;color:var(--gris);margin:-4px 0 10px;" class="no-imprimir">Marca las que quieras incluir en la tabla de trazabilidad del Excel/PDF. Cada una muestra quién pidió y cuándo, quién entregó y a quién, si faltó/sobró algo y si hubo devolución.</p>
+      <div id="listaRequisiciones" class="no-imprimir"></div>
     </div>
   </main>
 </div>
@@ -186,6 +213,7 @@
         </div>`).join("");
 
       renderRequisiciones();
+      renderTablaImpresion();
       actualizarContador();
 
       document.getElementById("loading").style.display = "none";
@@ -201,8 +229,11 @@
             <input type="checkbox" class="chkReq" data-id="${r.id}" ${seleccionadas.has(r.id) ? "checked" : ""}>
             <div class="info">
               <div class="fila"><span>${r.id} · ${r.referencia}</span><span class="badge badge-${claseEstado(r.estado)}">${r.estado}</span></div>
-              <p class="op">Solicitó ${r.solicito} · ${r.cantidadSolicitada} ${ultimoData.unitLabel} pedidos · ${r.fecha}</p>
+              <p class="op">Solicitó ${r.solicito}${r.cargo ? " (" + r.cargo + ")" : ""} · ${r.cantidadSolicitada} ${ultimoData.unitLabel} pedidos · ${r.fecha}${r.hora ? " " + r.hora : ""}</p>
               ${r.motivo ? `<p class="op">Motivo: ${r.motivo}</p>` : ""}
+              ${r.entrego ? `<p class="op">Entregó ${r.entrego} · ${r.cantidadEntregada || 0} ${ultimoData.unitLabel} a ${r.entregadoA || "-"} · ${r.fechaEntrega || ""}${r.horaEntrega ? " " + r.horaEntrega : ""}</p>` : ""}
+              ${r.diferencia !== "" && r.diferencia !== undefined && Number(r.diferencia) !== 0 ? `<p class="op">${Number(r.diferencia) > 0 ? "Faltante" : "Sobrante"}: ${Math.abs(Number(r.diferencia))} ${ultimoData.unitLabel}</p>` : ""}
+              ${r.cantidadDevuelta ? `<p class="op">Devolvió ${r.quienDevuelve || "-"} · ${r.cantidadDevuelta} ${ultimoData.unitLabel}${r.saldoNeto !== "" ? " · saldo neto " + r.saldoNeto : ""}</p>` : ""}
             </div>
           </label>`).join("");
 
@@ -211,27 +242,70 @@
           if (chk.checked) seleccionadas.add(chk.dataset.id);
           else seleccionadas.delete(chk.dataset.id);
           actualizarContador();
+          renderTablaImpresion();
         });
       });
+    }
+
+    // Tabla de trazabilidad que solo se ve al imprimir/descargar PDF, con las
+    // requisiciones marcadas — esto es lo que realmente se quiere reportar,
+    // no la vista de stock.
+    function renderTablaImpresion() {
+      const reqs = (ultimoData.requisiciones || []).filter((r) => seleccionadas.has(r.id));
+      const u = ultimoData.unitLabel;
+      const celda = (v) => `<td style="padding:6px 8px;border:1px solid var(--borde);">${v}</td>`;
+      document.getElementById("tbodyImpresion").innerHTML = reqs.length === 0
+        ? `<tr><td colspan="12" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">No hay requisiciones marcadas.</td></tr>`
+        : reqs.map((r) => {
+            const diferencia = r.diferencia !== "" && r.diferencia !== undefined
+              ? (Number(r.diferencia) > 0 ? "Faltan " + Number(r.diferencia) + " " + u : Number(r.diferencia) < 0 ? "Sobran " + Math.abs(Number(r.diferencia)) + " " + u : "Completo")
+              : "-";
+            const devolucion = r.cantidadDevuelta ? (r.cantidadDevuelta + " " + u + " · " + (r.quienDevuelve || "-")) : "-";
+            return "<tr>" +
+              celda(r.id) + celda(r.referencia) + celda(r.solicito + (r.cargo ? " (" + r.cargo + ")" : "")) +
+              celda(r.fecha + (r.hora ? " " + r.hora : "")) + celda(r.cantidadSolicitada + " " + u) +
+              celda(r.entrego || "-") + celda(r.entregadoA || "-") +
+              celda((r.fechaEntrega || "-") + (r.horaEntrega ? " " + r.horaEntrega : "")) +
+              celda(r.cantidadEntregada ? r.cantidadEntregada + " " + u : "-") +
+              celda(diferencia) + celda(devolucion) + celda(r.estado) +
+              "</tr>";
+          }).join("");
     }
 
     document.getElementById("btnTodas").addEventListener("click", () => {
       seleccionadas = new Set((ultimoData.requisiciones || []).map((r) => r.id));
       renderRequisiciones();
+      renderTablaImpresion();
       actualizarContador();
     });
     document.getElementById("btnNinguna").addEventListener("click", () => {
       seleccionadas = new Set();
       renderRequisiciones();
+      renderTablaImpresion();
       actualizarContador();
     });
 
-    // Descarga en Excel: resumen + inventario actual + el detalle de las
-    // requisiciones que queden marcadas con el checkbox.
+    // Descarga en Excel: la hoja principal es la trazabilidad de lo marcado con
+    // check (lo que realmente se quiere reportar); resumen e inventario quedan
+    // como hojas secundarias de apoyo, no lo primero que se ve.
     document.getElementById("btnExcel").addEventListener("click", () => {
       if (!ultimoData) return;
       const data = ultimoData;
       const wb = XLSX.utils.book_new();
+
+      const seleccion = data.requisiciones.filter((r) => seleccionadas.has(r.id));
+      const detalle = [
+        ["ID", "Ítem", "Solicitó", "Cargo", "Fecha solicitud", "Hora solicitud", "Cant. solicitada",
+         "Entregó", "Entregado a", "Fecha entrega", "Hora entrega", "Cant. entregada", "Diferencia",
+         "Devolvió", "Cant. devuelta", "Saldo neto", "Estado", "Motivo"],
+        ...seleccion.map((r) => [
+          r.id, r.referencia, r.solicito, r.cargo || "", r.fecha, r.hora || "", r.cantidadSolicitada,
+          r.entrego || "", r.entregadoA || "", r.fechaEntrega || "", r.horaEntrega || "", r.cantidadEntregada || "",
+          r.diferencia !== "" && r.diferencia !== undefined ? r.diferencia : "",
+          r.quienDevuelve || "", r.cantidadDevuelta || "", r.saldoNeto || "", r.estado, r.motivo || "",
+        ]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detalle), "Trazabilidad seleccionada");
 
       const resumen = [
         ["Reporte y KPI's", mod.label, empresaActual],
@@ -256,13 +330,6 @@
         ...data.inventario.map((it) => [it[codigoHeader], it[refHeader], it[stockHeader], it["Estado"]]),
       ];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(inventario), "Inventario actual");
-
-      const seleccion = data.requisiciones.filter((r) => seleccionadas.has(r.id));
-      const detalle = [
-        ["ID", "Fecha", "Código", "Referencia", "Solicitó", "Cant. solicitada", "Cant. entregada", "Estado", "Motivo"],
-        ...seleccion.map((r) => [r.id, r.fecha, r.codigo, r.referencia, r.solicito, r.cantidadSolicitada, r.cantidadEntregada, r.estado, r.motivo || ""]),
-      ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detalle), "Requisiciones seleccionadas");
 
       const nombre = `Reporte_${mod.label}_${empresaActual}_${document.getElementById("inpDesde").value}_a_${document.getElementById("inpHasta").value}.xlsx`;
       XLSX.writeFile(wb, nombre);
