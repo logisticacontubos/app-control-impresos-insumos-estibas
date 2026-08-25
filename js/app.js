@@ -282,14 +282,20 @@ function detalleRequisicion(r, mod) {
   const motivoHeader = buscarEncabezado(r, "Motivo");
 
   const lineas = [];
+  const solicitada = Number(r[cantSolHeader]) || 0;
   lineas.push(`Solicitó ${r["Solicitó"]} · ${r[cantSolHeader] || 0} ${mod.unitLabel} pedidos`);
   if (motivoHeader && r[motivoHeader]) {
     lineas.push(`Motivo: ${r[motivoHeader]}`);
   }
 
-  if (r.Estado === "Entregado" || r.Estado === "Cerrada") {
+  if (r.Estado === "Entregado" || r.Estado === "Entregado parcial" || r.Estado === "Cerrada") {
     const cantEnt = r[cantEntHeader];
-    lineas.push(`Entregó ${r["Entregó (bodega)"] || "-"} · ${cantEnt !== undefined && cantEnt !== "" ? cantEnt : "0"} ${mod.unitLabel} a ${r["Entregado a (producción)"] || "-"}`);
+    const entregado = cantEnt !== undefined && cantEnt !== "" ? Number(cantEnt) : 0;
+    lineas.push(`Entregó ${r["Entregó (bodega)"] || "-"} · ${entregado} ${mod.unitLabel} a ${r["Entregado a (producción)"] || "-"}`);
+    if (r.Estado === "Entregado parcial") {
+      const saldo = Math.max(0, solicitada - entregado);
+      lineas.push(`Entrega parcial · falta por entregar ${saldo} ${mod.unitLabel}`);
+    }
   }
 
   if (mod.hasDevolucion && cantDevHeader && r[cantDevHeader] !== undefined && r[cantDevHeader] !== "" && Number(r[cantDevHeader]) > 0) {
@@ -297,6 +303,12 @@ function detalleRequisicion(r, mod) {
   }
 
   return lineas.map((l) => `<p class="op">${l}</p>`).join("");
+}
+
+// Los estados con espacio ("Entregado parcial") no sirven directo como nombre
+// de clase CSS — esto arma el sufijo de la clase badge-<Estado> sin espacios.
+function claseEstado(estado) {
+  return (estado || "").toString().trim().replace(/\s+/g, "-");
 }
 
 function buscarEncabezado(obj, prefijo) {
