@@ -2,7 +2,7 @@
 // CONFIGURACIÓN
 // ==========================================================
 // Pega aquí la URL de implementación (Web App) de tu Apps Script (Code.gs)
-const API_URL = "PEGA_AQUI_LA_URL_DE_TU_APPS_SCRIPT";
+const API_URL = "https://script.google.com/macros/s/AKfycbzup1pgEC6Pe0XKt1CZVR6VWjCcANGwdOZSFlajSYeGbIdnVstPkSI6NdSsMjO74Deh/exec";
 
 // ==========================================================
 // SESIÓN (usuario logueado, guardado en sessionStorage) — igual que la app de rollos
