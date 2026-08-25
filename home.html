@@ -30,6 +30,14 @@
 
     <p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Módulos</p>
     <div id="modulos"></div>
+
+    <div id="seccionPendientesGlobal" style="display:none;margin-top:8px;">
+      <button class="accion" id="btnPendientesGlobal" style="text-align:left;">
+        <span class="icono">&#128230;</span>
+        <span>Requisiciones pendientes<div class="sub" id="subPendientesGlobal"></div></span>
+      </button>
+      <div id="listaPendientesGlobal" style="display:none;margin-top:4px;"></div>
+    </div>
   </main>
 </div>
 <script src="js/app.js"></script>
@@ -91,6 +99,57 @@ if (usuario) {
       </a>`).join("");
   }
   renderModulos();
+
+  // Para quienes entregan (bodega/admin): resumen de pendientes de TODOS los
+  // módulos, directo en el inicio, sin tener que entrar módulo por módulo a
+  // "Entregar y devoluciones" solo para ver si hay algo pendiente.
+  if (puedeEntregar(usuario.rol)) {
+    const seccion = document.getElementById("seccionPendientesGlobal");
+    const btn = document.getElementById("btnPendientesGlobal");
+    const sub = document.getElementById("subPendientesGlobal");
+    const lista = document.getElementById("listaPendientesGlobal");
+    let abierto = false;
+    let pendientesPorModulo = [];
+
+    async function cargarPendientesGlobal() {
+      const empresaActiva = obtenerEmpresaActiva();
+      const modulosAcceso = Object.values(MODULOS).filter((m) =>
+        puedeAccederModulo(usuario, m.key) && m.empresas.includes(empresaActiva));
+
+      const resultados = await Promise.all(modulosAcceso.map(async (m) => {
+        const reqData = await apiGet("getRequisiciones", { modulo: m.key });
+        const pendientes = (reqData.items || []).filter((r) => r.Estado === "Pendiente");
+        return pendientes.map((r) => ({ r, mod: m }));
+      }));
+      pendientesPorModulo = resultados.flat();
+
+      if (pendientesPorModulo.length === 0) {
+        seccion.style.display = "none";
+        return;
+      }
+      seccion.style.display = "block";
+      sub.textContent = pendientesPorModulo.length + " por entregar";
+      lista.innerHTML = pendientesPorModulo.map(({ r, mod: m }) => `
+        <a class="req-item" href="bodega.html?modulo=${m.key}#req-${r.ID}">
+          <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Pendiente">${m.label}</span></div>
+          <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
+          ${detalleRequisicion(r, m)}
+        </a>`).join("");
+    }
+
+    btn.addEventListener("click", () => {
+      abierto = !abierto;
+      lista.style.display = abierto ? "block" : "none";
+    });
+
+    cargarPendientesGlobal();
+    // Si cambia la empresa activa, se vuelve a calcular el resumen.
+    const cambiarOriginal = window.cambiarEmpresaActiva;
+    window.cambiarEmpresaActiva = function (empresa) {
+      cambiarOriginal(empresa);
+      cargarPendientesGlobal();
+    };
+  }
 }
 </script>
 </body>

@@ -44,7 +44,7 @@
       contPend.innerHTML = pendientes.length === 0
         ? '<p style="font-size:13px;color:var(--gris);">No hay requisiciones pendientes.</p>'
         : pendientes.map((r) => `
-            <div class="req-item">
+            <div class="req-item" id="req-${r.ID}">
               <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Pendiente">Pendiente</span></div>
               <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
               ${detalleRequisicion(r, mod)}
@@ -71,6 +71,18 @@
                 <button class="btn btn-primary">Registrar devolución</button>
               </form>
             </div>`).join("");
+      }
+
+      // Si se llegó aquí con un enlace directo desde "Cola de pendientes" en
+      // modulo.html (ej: bodega.html#req-INS-0005), lleva la vista hasta esa
+      // requisición y la resalta un momento para que se note cuál es.
+      if (window.location.hash) {
+        const destino = document.querySelector(window.location.hash);
+        if (destino) {
+          destino.scrollIntoView({ behavior: "smooth", block: "center" });
+          destino.style.boxShadow = "0 0 0 3px var(--magenta)";
+          setTimeout(() => { destino.style.boxShadow = ""; }, 2200);
+        }
       }
     }
     cargar();

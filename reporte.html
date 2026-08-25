@@ -8,7 +8,7 @@
 </head>
 <body>
 <div class="app">
-  <header class="topbar">
+  <header class="topbar no-imprimir">
     <a class="back" id="backLink" href="modulo.html">&#8592;</a>
     <div>
       <h1 id="titulo">Reporte y KPI's</h1>
@@ -16,7 +16,7 @@
     </div>
   </header>
   <main>
-    <div class="card">
+    <div class="card no-imprimir">
       <label>Desde</label>
       <input type="date" id="inpDesde">
       <label>Hasta</label>
@@ -27,6 +27,19 @@
     <div id="loading" class="loading">Cargando…</div>
 
     <div id="contenido" style="display:none;">
+      <div class="encabezado-pdf solo-impresion">
+        <img id="logoPdf" src="" alt="">
+        <div class="txt">
+          <h2 id="tituloPdf">Reporte y KPI's</h2>
+          <p id="subPdf"></p>
+        </div>
+      </div>
+
+      <div class="btn-row no-imprimir" style="margin-bottom:12px;">
+        <button class="btn btn-secondary" id="btnExcel">Descargar Excel</button>
+        <button class="btn btn-secondary" id="btnPdf">Descargar PDF</button>
+      </div>
+
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
         <div class="card-stat">
           <p class="label">Consumido en el período</p>
@@ -51,17 +64,32 @@
 
       <p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Inventario actual</p>
       <div id="listaInventario"></div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px;">
+        <p style="font-size:12px;color:var(--gris);margin:0;">Requisiciones del período <span id="contadorSel"></span></p>
+        <div class="no-imprimir">
+          <button class="link-mini" id="btnTodas">Todas</button>
+          &nbsp;·&nbsp;
+          <button class="link-mini" id="btnNinguna">Ninguna</button>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--gris);margin:-4px 0 10px;" class="no-imprimir">Marca las que quieras incluir en el detalle del Excel/PDF descargado.</p>
+      <div id="listaRequisiciones"></div>
     </div>
   </main>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/app.js"></script>
 <script>
   const ctx = requiereModulo();
   if (ctx) {
-    const { usuario, mod } = ctx;
+    const { usuario, mod, empresaActual } = ctx;
     document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
     document.getElementById("sub").textContent = mod.label;
     if (!puedeVerReportes(usuario.rol)) window.location.href = "modulo.html?modulo=" + mod.key;
+
+    document.getElementById("logoPdf").src = empresaActual === "Tecnipapel" ? "assets/logo-tecnipapel.png" : "assets/logo-contubos.png";
+    document.getElementById("tituloPdf").textContent = "Reporte y KPI's · " + mod.label;
 
     // Por defecto, últimos 30 días
     const hoy = new Date();
@@ -70,12 +98,25 @@
     document.getElementById("inpHasta").value = fmt(hoy);
     document.getElementById("inpDesde").value = fmt(hace30);
 
+    let ultimoData = null;
+    let seleccionadas = new Set();
+
+    function actualizarContador() {
+      document.getElementById("contadorSel").textContent =
+        ultimoData ? `(${seleccionadas.size} de ${ultimoData.requisiciones.length} seleccionadas)` : "";
+    }
+
     async function generar() {
       document.getElementById("loading").style.display = "block";
       document.getElementById("contenido").style.display = "none";
       const desde = document.getElementById("inpDesde").value;
       const hasta = document.getElementById("inpHasta").value;
       const data = await apiGet("getReporte", { modulo: mod.key, desde, hasta });
+      ultimoData = data;
+      seleccionadas = new Set((data.requisiciones || []).map((r) => r.id));
+
+      document.getElementById("subPdf").textContent =
+        empresaActual + " · " + desde + " a " + hasta + " · generado " + fechaHoy();
 
       document.getElementById("statConsumo").textContent = data.totalConsumido + " " + data.unitLabel;
       document.getElementById("statEntregadas").textContent = data.requisicionesEntregadas;
@@ -101,9 +142,95 @@
           <p class="op">Stock: ${it[stockHeader]} ${data.unitLabel}</p>
         </div>`).join("");
 
+      renderRequisiciones();
+      actualizarContador();
+
       document.getElementById("loading").style.display = "none";
       document.getElementById("contenido").style.display = "block";
     }
+
+    function renderRequisiciones() {
+      const reqs = ultimoData.requisiciones || [];
+      document.getElementById("listaRequisiciones").innerHTML = reqs.length === 0
+        ? '<p style="font-size:13px;color:var(--gris);">No hay requisiciones en este período.</p>'
+        : reqs.map((r) => `
+          <label class="req-check">
+            <input type="checkbox" class="chkReq" data-id="${r.id}" ${seleccionadas.has(r.id) ? "checked" : ""}>
+            <div class="info">
+              <div class="fila"><span>${r.id} · ${r.referencia}</span><span class="badge badge-${r.estado}">${r.estado}</span></div>
+              <p class="op">Solicitó ${r.solicito} · ${r.cantidadSolicitada} ${ultimoData.unitLabel} pedidos · ${r.fecha}</p>
+              ${r.motivo ? `<p class="op">Motivo: ${r.motivo}</p>` : ""}
+            </div>
+          </label>`).join("");
+
+      document.querySelectorAll(".chkReq").forEach((chk) => {
+        chk.addEventListener("change", () => {
+          if (chk.checked) seleccionadas.add(chk.dataset.id);
+          else seleccionadas.delete(chk.dataset.id);
+          actualizarContador();
+        });
+      });
+    }
+
+    document.getElementById("btnTodas").addEventListener("click", () => {
+      seleccionadas = new Set((ultimoData.requisiciones || []).map((r) => r.id));
+      renderRequisiciones();
+      actualizarContador();
+    });
+    document.getElementById("btnNinguna").addEventListener("click", () => {
+      seleccionadas = new Set();
+      renderRequisiciones();
+      actualizarContador();
+    });
+
+    // Descarga en Excel: resumen + inventario actual + el detalle de las
+    // requisiciones que queden marcadas con el checkbox.
+    document.getElementById("btnExcel").addEventListener("click", () => {
+      if (!ultimoData) return;
+      const data = ultimoData;
+      const wb = XLSX.utils.book_new();
+
+      const resumen = [
+        ["Reporte y KPI's", mod.label, empresaActual],
+        ["Desde", document.getElementById("inpDesde").value, "Hasta", document.getElementById("inpHasta").value],
+        [],
+        ["Consumido en el período", data.totalConsumido + " " + data.unitLabel],
+        ["Requisiciones entregadas", data.requisicionesEntregadas],
+        ["Ítems en crítico", data.itemsCritico],
+        ["Ítems en cero", data.itemsCero],
+        [],
+        ["Consumo por ítem"],
+        ["Referencia", "Cantidad (" + data.unitLabel + ")"],
+        ...data.consumo.map((c) => [c.referencia, c.cantidad]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
+
+      const codigoHeader = buscarEncabezado(data.inventario[0], "Código");
+      const refHeader = buscarEncabezado(data.inventario[0], "Referencia");
+      const stockHeader = buscarEncabezado(data.inventario[0], "Stock actual");
+      const inventario = [
+        ["Código", "Referencia", "Stock actual", "Estado"],
+        ...data.inventario.map((it) => [it[codigoHeader], it[refHeader], it[stockHeader], it["Estado"]]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(inventario), "Inventario actual");
+
+      const seleccion = data.requisiciones.filter((r) => seleccionadas.has(r.id));
+      const detalle = [
+        ["ID", "Fecha", "Código", "Referencia", "Solicitó", "Cant. solicitada", "Cant. entregada", "Estado", "Motivo"],
+        ...seleccion.map((r) => [r.id, r.fecha, r.codigo, r.referencia, r.solicito, r.cantidadSolicitada, r.cantidadEntregada, r.estado, r.motivo || ""]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detalle), "Requisiciones seleccionadas");
+
+      const nombre = `Reporte_${mod.label}_${empresaActual}_${document.getElementById("inpDesde").value}_a_${document.getElementById("inpHasta").value}.xlsx`;
+      XLSX.writeFile(wb, nombre);
+    });
+
+    // Descarga en PDF: usa el diálogo de impresión del navegador (Guardar como PDF),
+    // con una hoja de estilos de impresión que muestra el logo/color de la empresa
+    // y oculta los controles (filtros, checkboxes, botones).
+    document.getElementById("btnPdf").addEventListener("click", () => {
+      window.print();
+    });
 
     document.getElementById("btnGenerar").addEventListener("click", generar);
     generar();
