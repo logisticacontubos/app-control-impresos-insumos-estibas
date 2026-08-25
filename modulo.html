@@ -57,6 +57,9 @@
     if (usuario.rol === "compras" || usuario.rol === "bodega" || usuario.rol === "admin") {
       html += `<a class="accion" href="compras.html?modulo=${mod.key}"><span class="icono">&#128181;</span>Vista de compras</a>`;
     }
+    if (puedeVerReportes(usuario.rol)) {
+      html += `<a class="accion" href="reporte.html?modulo=${mod.key}"><span class="icono">&#128202;</span>Reporte y KPI's</a>`;
+    }
     acciones.innerHTML = html;
   }
 </script>

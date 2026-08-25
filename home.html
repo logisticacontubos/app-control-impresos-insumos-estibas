@@ -58,6 +58,7 @@ function cambiarEmpresaActiva(empresa) {
   renderSelectorEmpresa();
   aplicarTema(empresa);
   actualizarLogo(empresa);
+  renderModulos();
 }
 
 if (usuario) {
@@ -75,12 +76,21 @@ if (usuario) {
     insumos: "📦",
     estibas: "🪵",
   };
-  const accesibles = Object.values(MODULOS).filter((m) => puedeAccederModulo(usuario, m.key));
-  document.getElementById("modulos").innerHTML = accesibles.map((m) => `
-    <a class="accion" href="modulo.html?modulo=${m.key}">
-      <span class="icono">${iconos[m.key] || "•"}</span>
-      <span>${m.label}<div class="sub">${m.empresas.join(" / ")}</div></span>
-    </a>`).join("");
+  // El módulo solo aparece si el usuario tiene acceso Y la empresa activa en pantalla
+  // (roja Contubos / verde Tecnipapel) realmente maneja ese módulo — Impresos es solo
+  // Contubos, así que en contexto Tecnipapel no debe salir su ícono aunque el usuario
+  // sea de "Ambas" empresas.
+  function renderModulos() {
+    const empresaActiva = obtenerEmpresaActiva();
+    const accesibles = Object.values(MODULOS).filter((m) =>
+      puedeAccederModulo(usuario, m.key) && m.empresas.includes(empresaActiva));
+    document.getElementById("modulos").innerHTML = accesibles.map((m) => `
+      <a class="accion" href="modulo.html?modulo=${m.key}">
+        <span class="icono">${iconos[m.key] || "•"}</span>
+        <span>${m.label}<div class="sub">${m.empresas.join(" / ")}</div></span>
+      </a>`).join("");
+  }
+  renderModulos();
 }
 </script>
 </body>

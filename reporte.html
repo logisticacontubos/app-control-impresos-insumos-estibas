@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporte · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="modulo.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Reporte y KPI's</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <div class="card">
+      <label>Desde</label>
+      <input type="date" id="inpDesde">
+      <label>Hasta</label>
+      <input type="date" id="inpHasta">
+      <button class="btn btn-secondary" id="btnGenerar" style="margin-top:4px;">Generar reporte</button>
+    </div>
+
+    <div id="loading" class="loading">Cargando…</div>
+
+    <div id="contenido" style="display:none;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div class="card-stat">
+          <p class="label">Consumido en el período</p>
+          <p class="value" id="statConsumo" style="color:var(--magenta);">-</p>
+        </div>
+        <div class="card-stat">
+          <p class="label">Requisiciones entregadas</p>
+          <p class="value" id="statEntregadas">-</p>
+        </div>
+        <div class="card-stat">
+          <p class="label">Ítems en crítico</p>
+          <p class="value" id="statCritico" style="color:var(--rojo);">-</p>
+        </div>
+        <div class="card-stat">
+          <p class="label">Ítems en cero</p>
+          <p class="value" id="statCero" style="color:var(--rojo);">-</p>
+        </div>
+      </div>
+
+      <p style="font-size:12px;color:var(--gris);margin:16px 0 8px;">Consumo por ítem en el período</p>
+      <div id="listaConsumo"></div>
+
+      <p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Inventario actual</p>
+      <div id="listaInventario"></div>
+    </div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { usuario, mod } = ctx;
+    document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
+    document.getElementById("sub").textContent = mod.label;
+    if (!puedeVerReportes(usuario.rol)) window.location.href = "modulo.html?modulo=" + mod.key;
+
+    // Por defecto, últimos 30 días
+    const hoy = new Date();
+    const hace30 = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000);
+    function fmt(d) { return d.toISOString().slice(0, 10); }
+    document.getElementById("inpHasta").value = fmt(hoy);
+    document.getElementById("inpDesde").value = fmt(hace30);
+
+    async function generar() {
+      document.getElementById("loading").style.display = "block";
+      document.getElementById("contenido").style.display = "none";
+      const desde = document.getElementById("inpDesde").value;
+      const hasta = document.getElementById("inpHasta").value;
+      const data = await apiGet("getReporte", { modulo: mod.key, desde, hasta });
+
+      document.getElementById("statConsumo").textContent = data.totalConsumido + " " + data.unitLabel;
+      document.getElementById("statEntregadas").textContent = data.requisicionesEntregadas;
+      document.getElementById("statCritico").textContent = data.itemsCritico;
+      document.getElementById("statCero").textContent = data.itemsCero;
+
+      document.getElementById("listaConsumo").innerHTML = data.consumo.length === 0
+        ? '<p style="font-size:13px;color:var(--gris);">Sin consumo registrado en este período.</p>'
+        : data.consumo.map((c) => `
+          <div class="req-item">
+            <div class="fila"><span class="reqid" style="font-size:14px;">${c.referencia}</span><span>${c.cantidad} ${data.unitLabel}</span></div>
+          </div>`).join("");
+
+      const codigoHeader = buscarEncabezado(data.inventario[0], "Código");
+      const refHeader = buscarEncabezado(data.inventario[0], "Referencia");
+      const stockHeader = buscarEncabezado(data.inventario[0], "Stock actual");
+      document.getElementById("listaInventario").innerHTML = data.inventario.map((it) => `
+        <div class="req-item">
+          <div class="fila">
+            <span class="reqid" style="font-size:14px;">${it[refHeader]}</span>
+            <span class="badge badge-${it["Estado"]}">${it["Estado"]}</span>
+          </div>
+          <p class="op">Stock: ${it[stockHeader]} ${data.unitLabel}</p>
+        </div>`).join("");
+
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("contenido").style.display = "block";
+    }
+
+    document.getElementById("btnGenerar").addEventListener("click", generar);
+    generar();
+  }
+</script>
+</body>
+</html>
