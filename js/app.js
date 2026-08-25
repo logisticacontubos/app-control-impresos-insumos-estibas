@@ -2,7 +2,7 @@
 // CONFIGURACIÓN
 // ==========================================================
 // Pega aquí la URL de implementación (Web App) de tu Apps Script (Code.gs)
-const API_URL = "https://script.google.com/macros/s/AKfycbzup1pgEC6Pe0XKt1CZVR6VWjCcANGwdOZSFlajSYeGbIdnVstPkSI6NdSsMjO74Deh/exec";
+const API_URL = "PEGA_AQUI_LA_URL_DE_TU_APPS_SCRIPT";
 
 // ==========================================================
 // SESIÓN (usuario logueado, guardado en sessionStorage) — igual que la app de rollos
@@ -73,6 +73,7 @@ function empresasParaUsuario(usuario, moduloKey) {
 function puedeCrearRequisicion(rol) { return rol === "produccion" || rol === "admin"; }
 function puedeEntregar(rol) { return rol === "bodega" || rol === "admin"; }
 function puedeEditarUmbrales(rol) { return rol === "compras" || rol === "admin"; }
+function puedeVerReportes(rol) { return rol === "compras" || rol === "bodega" || rol === "admin"; }
 function vistasParaRol(rol) {
   const VISTAS = {
     produccion: ["produccion", "inventario"],
