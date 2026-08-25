@@ -245,8 +245,13 @@ function detalleRequisicion(r, mod) {
   const cantDevHeader = buscarEncabezado(r, "Cantidad devuelta");
   const saldoHeader = buscarEncabezado(r, "Saldo neto");
 
+  const motivoHeader = buscarEncabezado(r, "Motivo");
+
   const lineas = [];
   lineas.push(`Solicitó ${r["Solicitó"]} · ${r[cantSolHeader] || 0} ${mod.unitLabel} pedidos`);
+  if (motivoHeader && r[motivoHeader]) {
+    lineas.push(`Motivo: ${r[motivoHeader]}`);
+  }
 
   if (r.Estado === "Entregado" || r.Estado === "Cerrada") {
     const cantEnt = r[cantEntHeader];
