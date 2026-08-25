@@ -191,8 +191,42 @@ function requiereModulo() {
   establecerEmpresaActiva(empresaActual);
   aplicarTema(empresaActual);
   mostrarUsuarioEnHeader(usuario);
+  mostrarLogoEnHeader(empresaActual);
+  mostrarBotonActualizar();
 
   return { usuario, mod, empresas, empresaActual };
+}
+
+// Logo de la empresa (Contubos o Tecnipapel, cada uno con su color de marca) fijo
+// en el header de TODAS las pantallas de módulo, para que siempre se vea con
+// claridad en qué empresa se está trabajando, no solo por el color de fondo.
+function mostrarLogoEnHeader(empresa) {
+  const header = document.querySelector("header.topbar");
+  if (!header) return;
+  let img = header.querySelector(".logo-header");
+  if (!img) {
+    img = document.createElement("img");
+    img.className = "logo-header";
+    const back = header.querySelector(".back");
+    if (back && back.nextSibling) header.insertBefore(img, back.nextSibling);
+    else header.appendChild(img);
+  }
+  if (empresa === "Tecnipapel") { img.src = "assets/logo-tecnipapel.png"; img.alt = "Tecnipapel"; }
+  else { img.src = "assets/logo-contubos.png"; img.alt = "Contubos"; }
+}
+
+// Botón "Actualizar" en el header de todas las pantallas de módulo, para
+// refrescar los datos (inventario, requisiciones, etc.) sin tener que salir
+// y volver a entrar.
+function mostrarBotonActualizar() {
+  const header = document.querySelector("header.topbar");
+  if (!header || header.querySelector(".btn-actualizar")) return;
+  const btn = document.createElement("button");
+  btn.className = "btn-actualizar";
+  btn.title = "Actualizar";
+  btn.innerHTML = "&#8635;";
+  btn.onclick = () => window.location.reload();
+  header.appendChild(btn);
 }
 
 // Pone el nombre y cargo/rol de quien está conectado en la esquina del header,
