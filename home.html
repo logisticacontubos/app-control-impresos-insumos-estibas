@@ -125,12 +125,15 @@ if (usuario) {
       // se ven los pendientes de Contubos y Tecnipapel juntos en un solo lugar.
       const params = esMultiEmpresa(usuario) ? { empresa: "" } : {};
 
-      const resultados = await Promise.all(modulosAcceso.map(async (m) => {
-        const reqData = await apiGet("getRequisiciones", Object.assign({ modulo: m.key }, params));
-        const pendientes = (reqData.items || []).filter((r) => r.Estado === "Pendiente" || r.Estado === "Entregado parcial");
-        return pendientes.map((r) => ({ r, mod: m }));
-      }));
-      pendientesPorModulo = resultados.flat();
+      // Una sola llamada combinada al backend (getPendientesGlobal) en vez de
+      // una llamada por módulo — reduce hasta 3 round-trips a Apps Script a 1
+      // solo. Además se marca "silencioso" para que esta carga de fondo no
+      // bloquee toda la pantalla con el overlay de carga, ya que los módulos
+      // arriba ya están listos para usarse mientras esto termina de llegar.
+      const data = await apiGet("getPendientesGlobal", params, { silencioso: true });
+      pendientesPorModulo = modulosAcceso.flatMap((m) =>
+        (data[m.key] || []).map((r) => ({ r, mod: m }))
+      );
 
       if (pendientesPorModulo.length === 0) {
         seccion.style.display = "none";
