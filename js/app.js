@@ -129,6 +129,36 @@ function ocultarCargando() {
 // deben congelar toda la pantalla con el spinner (ej: el resumen de pendientes
 // que se carga solo al entrar a Inicio) — el usuario puede seguir navegando
 // mientras esa carga termina, en vez de quedar bloqueado esperándola.
+// A veces Google Apps Script termina de ejecutar la función sin ningún error
+// (se ve "Completada" en el registro de Ejecuciones), pero la respuesta no le
+// llega bien al navegador — llega una página de error en vez del JSON
+// esperado. Es un problema intermitente de la infraestructura de Google al
+// entregar la respuesta, no un error del código. Como reintentar la MISMA
+// petición GET (leer datos) es seguro, pero reintentar un POST (crear/
+// entregar/devolver) podría duplicar la operación si la primera sí se
+// guardó, aquí solo se reintenta automáticamente cuando es seguro hacerlo.
+async function fetchConReintento(hacerFetch, reintentos) {
+  let ultimoError;
+  for (let intento = 0; intento <= reintentos; intento++) {
+    try {
+      const resp = await hacerFetch();
+      const texto = await resp.text();
+      let json;
+      try {
+        json = JSON.parse(texto);
+      } catch (e) {
+        throw new Error("La respuesta de Google no fue válida (intenta de nuevo en unos segundos).");
+      }
+      if (!json.ok) throw new Error(json.error || "Error desconocido");
+      return json.data;
+    } catch (e) {
+      ultimoError = e;
+      if (intento < reintentos) await new Promise((r) => setTimeout(r, 900));
+    }
+  }
+  throw ultimoError;
+}
+
 async function apiPost(accion, datos, opts) {
   const empresaActiva = obtenerEmpresaActiva();
   const body = Object.assign({ accion: accion }, datos);
@@ -136,14 +166,15 @@ async function apiPost(accion, datos, opts) {
   const silencioso = opts && opts.silencioso;
   if (!silencioso) mostrarCargando(MENSAJES_CARGA[accion] || "Procesando...");
   try {
-    const resp = await fetch(API_URL, {
+    // Los POST (crear/entregar/devolver) NO se reintentan automáticamente:
+    // si la primera petición sí se guardó en la hoja pero la respuesta se
+    // perdió, reintentar duplicaría la entrega/devolución. Si falla, hay que
+    // revisar la hoja antes de volver a intentar manualmente.
+    return await fetchConReintento(() => fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(body),
-    });
-    const json = await resp.json();
-    if (!json.ok) throw new Error(json.error || "Error desconocido");
-    return json.data;
+    }), 0);
   } finally {
     if (!silencioso) ocultarCargando();
   }
@@ -157,10 +188,11 @@ async function apiGet(accion, params, opts) {
   const silencioso = opts && opts.silencioso;
   if (!silencioso) mostrarCargando(MENSAJES_CARGA[accion] || "Cargando...");
   try {
-    const resp = await fetch(API_URL + "?" + qs.toString());
-    const json = await resp.json();
-    if (!json.ok) throw new Error(json.error || "Error desconocido");
-    return json.data;
+    // Los GET (solo leer datos) sí se reintentan hasta 2 veces — son seguros
+    // de repetir porque no cambian nada, así que si el primer intento choca
+    // con el problema intermitente de Google, el segundo o tercero casi
+    // siempre funciona sin que el usuario note nada.
+    return await fetchConReintento(() => fetch(API_URL + "?" + qs.toString()), 2);
   } finally {
     if (!silencioso) ocultarCargando();
   }
