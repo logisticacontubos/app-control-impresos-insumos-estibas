@@ -35,11 +35,28 @@
     document.getElementById("titulo").textContent = "Bodega";
     document.getElementById("sub").textContent = mod.label;
 
+    // Mapa código (sin espacios, sin mayúsculas) -> stock actual, para mostrar
+    // cuánto hay disponible justo al momento de entregar, sin tener que salir
+    // a mirar la pantalla de Inventario. Se arma con el mismo filtro de
+    // empresa que ya usa el resto de la pantalla, así que funciona igual en
+    // Contubos y en Tecnipapel, y en los tres módulos.
+    function claveCodigo(c) { return String(c || "").trim().toLowerCase(); }
+
     async function cargar() {
-      const reqData = await apiGet("getRequisiciones", { modulo: mod.key });
+      const [reqData, invData] = await Promise.all([
+        apiGet("getRequisiciones", { modulo: mod.key }),
+        apiGet("getInventario", { modulo: mod.key }),
+      ]);
       const items = reqData.items || [];
       const pendientes = items.filter((r) => r.Estado === "Pendiente" || r.Estado === "Entregado parcial");
       const entregadas = mod.hasDevolucion ? items.filter((r) => r.Estado === "Entregado") : [];
+
+      const stockPorCodigo = {};
+      (invData.items || []).forEach((it) => {
+        const codigoHeader = buscarEncabezado(it, "Código");
+        const stockHeader = buscarEncabezado(it, "Stock actual");
+        if (codigoHeader && stockHeader) stockPorCodigo[claveCodigo(it[codigoHeader])] = it[stockHeader];
+      });
 
       const contPend = document.getElementById("pendientes");
       contPend.innerHTML = pendientes.length === 0
@@ -50,11 +67,14 @@
             const solicitada = Number(r[cantSolHeader]) || 0;
             const entregada = Number(r[cantEntHeader]) || 0;
             const saldo = Math.max(0, solicitada - entregada);
+            const disponible = stockPorCodigo[claveCodigo(r["Código"])];
+            const hayDisponible = disponible !== undefined && disponible !== "" && disponible !== null;
             return `
             <div class="req-item" id="req-${r.ID}">
               <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-${claseEstado(r.Estado)}">${r.Estado}</span></div>
               <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
               ${detalleRequisicion(r, mod)}
+              ${hayDisponible ? `<p style="font-size:12px;color:var(--gris);margin:0 0 8px;">Disponible en inventario: <strong style="color:var(--texto);">${disponible} ${mod.unitLabel}</strong></p>` : ""}
               <form onsubmit="return entregar(event, '${r.ID}')">
                 <input type="number" placeholder="Cantidad entregada (${mod.unitLabel})${r.Estado === "Entregado parcial" ? " · faltan " + saldo : ""}" class="inp-cant" step="0.01" min="0" required>
                 <input type="text" placeholder="Operario de producción que recibe" class="inp-recibe" required>
