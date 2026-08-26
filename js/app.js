@@ -125,11 +125,16 @@ function ocultarCargando() {
 // ==========================================================
 // LLAMADAS A LA API (Apps Script) — mismo patrón que la app de rollos
 // ==========================================================
-async function apiPost(accion, datos) {
+// El tercer parámetro { silencioso: true } es para llamadas de fondo que NO
+// deben congelar toda la pantalla con el spinner (ej: el resumen de pendientes
+// que se carga solo al entrar a Inicio) — el usuario puede seguir navegando
+// mientras esa carga termina, en vez de quedar bloqueado esperándola.
+async function apiPost(accion, datos, opts) {
   const empresaActiva = obtenerEmpresaActiva();
   const body = Object.assign({ accion: accion }, datos);
   if (empresaActiva && body.empresa === undefined) body.empresa = empresaActiva;
-  mostrarCargando(MENSAJES_CARGA[accion] || "Procesando...");
+  const silencioso = opts && opts.silencioso;
+  if (!silencioso) mostrarCargando(MENSAJES_CARGA[accion] || "Procesando...");
   try {
     const resp = await fetch(API_URL, {
       method: "POST",
@@ -140,23 +145,24 @@ async function apiPost(accion, datos) {
     if (!json.ok) throw new Error(json.error || "Error desconocido");
     return json.data;
   } finally {
-    ocultarCargando();
+    if (!silencioso) ocultarCargando();
   }
 }
 
-async function apiGet(accion, params) {
+async function apiGet(accion, params, opts) {
   const empresaActiva = obtenerEmpresaActiva();
   const base = Object.assign({ accion: accion }, params || {});
   if (empresaActiva && base.empresa === undefined) base.empresa = empresaActiva;
   const qs = new URLSearchParams(base);
-  mostrarCargando(MENSAJES_CARGA[accion] || "Cargando...");
+  const silencioso = opts && opts.silencioso;
+  if (!silencioso) mostrarCargando(MENSAJES_CARGA[accion] || "Cargando...");
   try {
     const resp = await fetch(API_URL + "?" + qs.toString());
     const json = await resp.json();
     if (!json.ok) throw new Error(json.error || "Error desconocido");
     return json.data;
   } finally {
-    ocultarCargando();
+    if (!silencioso) ocultarCargando();
   }
 }
 
