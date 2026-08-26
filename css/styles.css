@@ -87,6 +87,8 @@ header.topbar .btn-actualizar{
   box-shadow:0 6px 18px rgba(26,26,26,0.15);
 }
 header.topbar .btn-actualizar:active{transform:rotate(75deg);}
+header.topbar .btn-salir{color:var(--gris);}
+header.topbar .btn-salir:active{transform:scale(0.9);}
 header.topbar .userchip{
   margin-left:auto;
   text-align:right;
