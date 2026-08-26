@@ -106,10 +106,11 @@ if (usuario) {
   }
   renderModulos();
 
-  // Para quienes entregan (bodega/admin): resumen de pendientes de TODOS los
-  // módulos, directo en el inicio, sin tener que entrar módulo por módulo a
-  // "Entregar y devoluciones" solo para ver si hay algo pendiente.
-  if (puedeEntregar(usuario.rol)) {
+  // Resumen de pendientes de TODOS los módulos, directo en el inicio, para
+  // CUALQUIER usuario (no solo quien entrega) — y de AMBAS empresas a la vez
+  // cuando el usuario tiene acceso a las dos ("Ambas"), sin depender de cuál
+  // empresa esté seleccionada con los chips de arriba.
+  {
     const seccion = document.getElementById("seccionPendientesGlobal");
     const btn = document.getElementById("btnPendientesGlobal");
     const sub = document.getElementById("subPendientesGlobal");
@@ -118,12 +119,14 @@ if (usuario) {
     let pendientesPorModulo = [];
 
     async function cargarPendientesGlobal() {
-      const empresaActiva = obtenerEmpresaActiva();
-      const modulosAcceso = Object.values(MODULOS).filter((m) =>
-        puedeAccederModulo(usuario, m.key) && m.empresas.includes(empresaActiva));
+      const modulosAcceso = Object.values(MODULOS).filter((m) => puedeAccederModulo(usuario, m.key));
+      // Si el usuario es de "Ambas" empresas, se trae la cola sin filtrar por
+      // empresa (empresa:"" evita que apiGet meta la empresa activa sola), así
+      // se ven los pendientes de Contubos y Tecnipapel juntos en un solo lugar.
+      const params = esMultiEmpresa(usuario) ? { empresa: "" } : {};
 
       const resultados = await Promise.all(modulosAcceso.map(async (m) => {
-        const reqData = await apiGet("getRequisiciones", { modulo: m.key });
+        const reqData = await apiGet("getRequisiciones", Object.assign({ modulo: m.key }, params));
         const pendientes = (reqData.items || []).filter((r) => r.Estado === "Pendiente" || r.Estado === "Entregado parcial");
         return pendientes.map((r) => ({ r, mod: m }));
       }));
@@ -137,7 +140,7 @@ if (usuario) {
       sub.textContent = pendientesPorModulo.length + " por entregar";
       lista.innerHTML = pendientesPorModulo.map(({ r, mod: m }) => `
         <a class="req-item" href="bodega.html?modulo=${m.key}#req-${r.ID}">
-          <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Pendiente">${m.label}</span></div>
+          <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Pendiente">${m.label}${r["Empresa"] ? " · " + r["Empresa"] : ""}</span></div>
           <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
           ${detalleRequisicion(r, m)}
         </a>`).join("");
@@ -149,12 +152,6 @@ if (usuario) {
     });
 
     cargarPendientesGlobal();
-    // Si cambia la empresa activa, se vuelve a calcular el resumen.
-    const cambiarOriginal = window.cambiarEmpresaActiva;
-    window.cambiarEmpresaActiva = function (empresa) {
-      cambiarOriginal(empresa);
-      cargarPendientesGlobal();
-    };
   }
 }
 </script>
