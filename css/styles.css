@@ -33,10 +33,12 @@ body{
 header.topbar{
   background:transparent;
   color:var(--texto);
-  padding:20px 20px 8px;
+  padding:20px 16px 8px;
   display:flex;
   align-items:center;
-  gap:12px;
+  gap:8px;
+  flex-wrap:wrap;
+  row-gap:8px;
 }
 header.topbar .back{
   color:var(--texto);
@@ -53,15 +55,28 @@ header.topbar .back{
   flex-shrink:0;
   box-shadow:0 6px 18px rgba(26,26,26,0.15);
 }
+/* El bloque de título (h1 + .sub) es el único elemento del header sin ancho
+   fijo — se deja encoger y truncar con "..." en vez de forzar que el resto
+   de iconos (logo, actualizar, salir) se salgan del recuadro del teléfono. */
+header.topbar > div:not(.userchip){
+  flex:1 1 auto;
+  min-width:0;
+}
 header.topbar h1{
   font-size:19px;
   font-weight:700;
   margin:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 header.topbar .sub{
   font-size:13px;
   color:var(--gris);
   margin:2px 0 0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 header.topbar .logo-header{
   height:26px;
@@ -83,7 +98,6 @@ header.topbar .btn-actualizar{
   justify-content:center;
   cursor:pointer;
   flex-shrink:0;
-  margin-left:10px;
   box-shadow:0 6px 18px rgba(26,26,26,0.15);
 }
 header.topbar .btn-actualizar:active{transform:rotate(75deg);}
@@ -95,6 +109,14 @@ header.topbar .userchip{
   font-size:11px;
   color:var(--gris);
   line-height:1.3;
+  max-width:100px;
+  overflow:hidden;
+}
+header.topbar .userchip .nombre,
+header.topbar .userchip .rol{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 header.topbar .userchip .nombre{
   font-weight:700;
