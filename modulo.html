@@ -57,6 +57,7 @@
       html += `<a class="accion" href="bodega.html?modulo=${mod.key}"><span class="icono">&#128230;</span>${mod.hasDevolucion ? "Entregar y devoluciones" : "Entregar"}</a>`;
     }
     html += `<a class="accion" href="inventario.html?modulo=${mod.key}"><span class="icono">&#128202;</span>Ver inventario</a>`;
+    html += `<a class="accion" href="historial.html?modulo=${mod.key}"><span class="icono">&#128337;</span>Historial de movimientos</a>`;
     if (usuario.rol === "compras" || usuario.rol === "bodega" || usuario.rol === "admin") {
       html += `<a class="accion" href="compras.html?modulo=${mod.key}"><span class="icono">&#128181;</span>Vista de compras</a>`;
     }

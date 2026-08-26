@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Historial · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="modulo.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Historial</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <input type="text" id="buscador" placeholder="Buscar por ID, referencia o quién solicitó...">
+    <div id="lista"></div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { mod } = ctx;
+    document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
+    document.getElementById("titulo").textContent = "Historial";
+    document.getElementById("sub").textContent = mod.label + " · trazabilidad completa";
+
+    let todas = [];
+
+    // Historial completo de movimientos (no solo lo pendiente): quién creó
+    // cada requisición y cuándo, quién la entregó y a quién y cuándo, y si
+    // hubo devolución — todo lo que ya arma detalleRequisicion(), que ahora
+    // también incluye fecha y hora. Se muestra TODO (Pendiente, Entregado
+    // parcial, Entregado), lo más reciente primero, en vez de solo la cola de
+    // pendientes que ya se ve en Bodega/Módulo.
+    function render(filtro) {
+      const f = (filtro || "").trim().toLowerCase();
+      const items = !f ? todas : todas.filter((r) =>
+        String(r.ID || "").toLowerCase().includes(f) ||
+        String(r["Referencia"] || "").toLowerCase().includes(f) ||
+        String(r["Solicitó"] || "").toLowerCase().includes(f));
+
+      document.getElementById("lista").innerHTML = items.length === 0
+        ? '<p style="font-size:13px;color:var(--gris);margin-top:16px;">No hay movimientos que coincidan.</p>'
+        : items.map((r) => `
+            <div class="req-item">
+              <div class="fila">
+                <span class="reqid">${r.ID}</span>
+                <span class="badge badge-${claseEstado(r.Estado)}">${r.Estado}${r["Empresa"] ? " · " + r["Empresa"] : ""}</span>
+              </div>
+              <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
+              ${detalleRequisicion(r, mod)}
+            </div>`).join("");
+    }
+
+    async function cargar() {
+      // Sin filtrar por empresa: en un módulo de "Ambas" (Insumos/Estibas)
+      // esto trae Contubos y Tecnipapel juntos, y como cada tarjeta ya
+      // muestra la empresa en la etiqueta, sigue siendo claro cuál es cuál —
+      // así no hay que ir cambiando el chip para revisar el historial completo.
+      const reqData = await apiGet("getRequisiciones", { modulo: mod.key, empresa: "" });
+      todas = (reqData.items || []).slice().sort((a, b) => {
+        const claveA = String(a["Fecha entrega"] || a["Fecha"] || "") + " " + String(a["Hora entrega"] || a["Hora"] || "");
+        const claveB = String(b["Fecha entrega"] || b["Fecha"] || "") + " " + String(b["Hora entrega"] || b["Hora"] || "");
+        return claveB.localeCompare(claveA);
+      });
+      render(document.getElementById("buscador").value);
+    }
+
+    document.getElementById("buscador").addEventListener("input", (e) => render(e.target.value));
+    cargar();
+  }
+</script>
+</body>
+</html>
