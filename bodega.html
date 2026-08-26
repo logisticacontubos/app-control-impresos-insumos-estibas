@@ -107,6 +107,7 @@
         } else {
           mostrarToast("Requisición entregada completa");
         }
+        if (res && res.advertenciaStock) alert(res.advertenciaStock);
         cargar();
       } catch (err) { alert(err.message); }
       return false;
