@@ -231,6 +231,7 @@ function requiereModulo() {
   mostrarUsuarioEnHeader(usuario);
   mostrarLogoEnHeader(empresaActual);
   mostrarBotonActualizar();
+  mostrarBotonSalir();
 
   return { usuario, mod, empresas, empresaActual };
 }
@@ -264,6 +265,21 @@ function mostrarBotonActualizar() {
   btn.title = "Actualizar";
   btn.innerHTML = "&#8635;";
   btn.onclick = () => window.location.reload();
+  header.appendChild(btn);
+}
+
+// Botón "Salir" (cerrar sesión) en el header de todas las pantallas de
+// módulo, al lado del de Actualizar — funciona igual en Contubos y en
+// Tecnipapel, y para cualquier usuario, sin tener que volver a Inicio para
+// cerrar sesión.
+function mostrarBotonSalir() {
+  const header = document.querySelector("header.topbar");
+  if (!header || header.querySelector(".btn-salir")) return;
+  const btn = document.createElement("button");
+  btn.className = "btn-actualizar btn-salir";
+  btn.title = "Cerrar sesión";
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>';
+  btn.onclick = () => cerrarSesion();
   header.appendChild(btn);
 }
 
