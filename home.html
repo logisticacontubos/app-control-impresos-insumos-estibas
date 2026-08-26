@@ -73,6 +73,11 @@ function cambiarEmpresaActiva(empresa) {
   aplicarTema(empresa);
   actualizarLogo(empresa);
   renderModulos();
+  // También se refresca la cola de pendientes al cambiar de empresa con los
+  // chips de arriba, para que muestre solo lo de la empresa en la que está
+  // parado en ese momento (window.cargarPendientesGlobal se define más abajo,
+  // en el bloque que arma esa sección).
+  if (window.cargarPendientesGlobal) window.cargarPendientesGlobal();
 }
 
 if (usuario) {
@@ -107,9 +112,9 @@ if (usuario) {
   renderModulos();
 
   // Resumen de pendientes de TODOS los módulos, directo en el inicio, para
-  // CUALQUIER usuario (no solo quien entrega) — y de AMBAS empresas a la vez
-  // cuando el usuario tiene acceso a las dos ("Ambas"), sin depender de cuál
-  // empresa esté seleccionada con los chips de arriba.
+  // CUALQUIER usuario (no solo quien entrega) — mostrando solo lo de la
+  // empresa en la que está parado en ese momento (el chip Contubos/
+  // Tecnipapel de arriba), no las dos mezcladas.
   {
     const seccion = document.getElementById("seccionPendientesGlobal");
     const btn = document.getElementById("btnPendientesGlobal");
@@ -120,10 +125,9 @@ if (usuario) {
 
     async function cargarPendientesGlobal() {
       const modulosAcceso = Object.values(MODULOS).filter((m) => puedeAccederModulo(usuario, m.key));
-      // Si el usuario es de "Ambas" empresas, se trae la cola sin filtrar por
-      // empresa (empresa:"" evita que apiGet meta la empresa activa sola), así
-      // se ven los pendientes de Contubos y Tecnipapel juntos en un solo lugar.
-      const params = esMultiEmpresa(usuario) ? { empresa: "" } : {};
+      // Se filtra explícitamente por la empresa activa (el chip seleccionado
+      // arriba), en vez de traer las dos empresas mezcladas.
+      const params = { empresa: obtenerEmpresaActiva() || "" };
 
       // Una sola llamada combinada al backend (getPendientesGlobal) en vez de
       // una llamada por módulo — reduce hasta 3 round-trips a Apps Script a 1
@@ -148,6 +152,8 @@ if (usuario) {
           ${detalleRequisicion(r, m)}
         </a>`).join("");
     }
+
+    window.cargarPendientesGlobal = cargarPendientesGlobal;
 
     btn.addEventListener("click", () => {
       abierto = !abierto;
