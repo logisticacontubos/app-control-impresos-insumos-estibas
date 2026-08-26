@@ -337,7 +337,10 @@ function detalleRequisicion(r, mod) {
 
   const lineas = [];
   const solicitada = Number(r[cantSolHeader]) || 0;
-  lineas.push(`Solicitó ${r["Solicitó"]} · ${r[cantSolHeader] || 0} ${mod.unitLabel} pedidos`);
+  // Fecha/hora de creación, para poder ver de un vistazo hace cuánto está
+  // pendiente una requisición sin tener que entrar al reporte.
+  const fechaSol = r["Fecha"] ? r["Fecha"] + (r["Hora"] ? " " + r["Hora"] : "") : "";
+  lineas.push(`Solicitó ${r["Solicitó"]} · ${r[cantSolHeader] || 0} ${mod.unitLabel} pedidos${fechaSol ? " · " + fechaSol : ""}`);
   if (motivoHeader && r[motivoHeader]) {
     lineas.push(`Motivo: ${r[motivoHeader]}`);
   }
@@ -345,7 +348,11 @@ function detalleRequisicion(r, mod) {
   if (r.Estado === "Entregado" || r.Estado === "Entregado parcial" || r.Estado === "Cerrada") {
     const cantEnt = r[cantEntHeader];
     const entregado = cantEnt !== undefined && cantEnt !== "" ? Number(cantEnt) : 0;
-    lineas.push(`Entregó ${r["Entregó (bodega)"] || "-"} · ${entregado} ${mod.unitLabel} a ${r["Entregado a (producción)"] || "-"}`);
+    // Igual con la entrega: fecha/hora de cuándo se entregó, no solo cuándo
+    // se pidió — así queda la trazabilidad completa a la vista, de un
+    // vistazo, sin tener que ir al Reporte.
+    const fechaEnt = r["Fecha entrega"] ? r["Fecha entrega"] + (r["Hora entrega"] ? " " + r["Hora entrega"] : "") : "";
+    lineas.push(`Entregó ${r["Entregó (bodega)"] || "-"} · ${entregado} ${mod.unitLabel} a ${r["Entregado a (producción)"] || "-"}${fechaEnt ? " · " + fechaEnt : ""}`);
     if (r.Estado === "Entregado parcial") {
       const saldo = Math.max(0, solicitada - entregado);
       lineas.push(`Entrega parcial · falta por entregar ${saldo} ${mod.unitLabel}`);
