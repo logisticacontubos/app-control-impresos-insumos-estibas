@@ -43,16 +43,17 @@
     function claveCodigo(c) { return String(c || "").trim().toLowerCase(); }
 
     async function cargar() {
-      const [reqData, invData] = await Promise.all([
-        apiGet("getRequisiciones", { modulo: mod.key }),
-        apiGet("getInventario", { modulo: mod.key }),
-      ]);
-      const items = reqData.items || [];
+      // Una sola llamada combinada (requisiciones + inventario juntos) en vez
+      // de 2 llamadas simultáneas — pedir 2 cosas al mismo tiempo a Apps
+      // Script puede chocar con el límite de ejecuciones simultáneas de
+      // Google y hacer que una de las 2 falle o se quede pegada.
+      const datos = await apiGet("getBodegaDatos", { modulo: mod.key });
+      const items = datos.requisiciones || [];
       const pendientes = items.filter((r) => r.Estado === "Pendiente" || r.Estado === "Entregado parcial");
       const entregadas = mod.hasDevolucion ? items.filter((r) => r.Estado === "Entregado") : [];
 
       const stockPorCodigo = {};
-      (invData.items || []).forEach((it) => {
+      (datos.inventario || []).forEach((it) => {
         const codigoHeader = buscarEncabezado(it, "Código");
         const stockHeader = buscarEncabezado(it, "Stock actual");
         if (codigoHeader && stockHeader) stockPorCodigo[claveCodigo(it[codigoHeader])] = it[stockHeader];
