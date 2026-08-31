@@ -73,6 +73,9 @@ function empresasParaUsuario(usuario, moduloKey) {
 function puedeCrearRequisicion(rol) { return rol === "produccion" || rol === "admin"; }
 function puedeEntregar(rol) { return rol === "bodega" || rol === "admin"; }
 function puedeEditarUmbrales(rol) { return rol === "compras" || rol === "admin"; }
+// Ingresar mercancía nueva al inventario: Jefe de Logística (rol "bodega") y
+// Supervisor de Inventarios (rol "admin").
+function puedeIngresarStock(rol) { return rol === "bodega" || rol === "admin"; }
 function puedeVerReportes(rol) { return rol === "compras" || rol === "bodega" || rol === "admin"; }
 function vistasParaRol(rol) {
   const VISTAS = {
@@ -100,6 +103,8 @@ const MENSAJES_CARGA = {
   getInventario: "Cargando inventario...",
   getRequisiciones: "Cargando requisiciones...",
   getReporte: "Generando reporte...",
+  ingresarStock: "Registrando ingreso...",
+  getIngresos: "Cargando ingresos...",
 };
 let _cargasActivas = 0;
 function mostrarCargando(mensaje) {
