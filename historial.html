@@ -31,43 +31,71 @@
 
     let todas = [];
 
-    // Historial completo de movimientos (no solo lo pendiente): quién creó
-    // cada requisición y cuándo, quién la entregó y a quién y cuándo, y si
-    // hubo devolución — todo lo que ya arma detalleRequisicion(), que ahora
-    // también incluye fecha y hora. Se muestra TODO (Pendiente, Entregado
-    // parcial, Entregado), lo más reciente primero, en vez de solo la cola de
+    // Historial completo de movimientos, mezclando dos tipos de eventos:
+    // - "requisicion": quién creó cada requisición y cuándo, quién la
+    //   entregó y a quién y cuándo, y si hubo devolución (vía
+    //   detalleRequisicion(), que ya incluye fecha y hora).
+    // - "ingreso": entradas de mercancía nueva al inventario (compras que
+    //   llegaron), con quién la registró, cuánto y cuándo.
+    // Se muestra TODO, lo más reciente primero, en vez de solo la cola de
     // pendientes que ya se ve en Bodega/Módulo.
     function render(filtro) {
       const f = (filtro || "").trim().toLowerCase();
-      const items = !f ? todas : todas.filter((r) =>
-        String(r.ID || "").toLowerCase().includes(f) ||
-        String(r["Referencia"] || "").toLowerCase().includes(f) ||
-        String(r["Solicitó"] || "").toLowerCase().includes(f));
+      const items = !f ? todas : todas.filter((x) => {
+        const r = x.datos;
+        return String(r.ID || "").toLowerCase().includes(f) ||
+          String(r["Referencia"] || "").toLowerCase().includes(f) ||
+          String(r["Solicitó"] || "").toLowerCase().includes(f) ||
+          String(r["Ingresó"] || "").toLowerCase().includes(f);
+      });
 
       document.getElementById("lista").innerHTML = items.length === 0
         ? '<p style="font-size:13px;color:var(--gris);margin-top:16px;">No hay movimientos que coincidan.</p>'
-        : items.map((r) => `
-            <div class="req-item">
-              <div class="fila">
-                <span class="reqid">${r.ID}</span>
-                <span class="badge badge-${claseEstado(r.Estado)}">${r.Estado}${r["Empresa"] ? " · " + r["Empresa"] : ""}</span>
-              </div>
-              <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
-              ${detalleRequisicion(r, mod)}
-            </div>`).join("");
+        : items.map((x) => {
+            const r = x.datos;
+            if (x.tipo === "ingreso") {
+              return `
+                <div class="req-item">
+                  <div class="fila">
+                    <span class="reqid">${r.ID}</span>
+                    <span class="badge badge-Óptimo">Ingreso stock · +${r["Cantidad"]} ${mod.unitLabel}${r["Empresa"] ? " · " + r["Empresa"] : ""}</span>
+                  </div>
+                  <p class="op" style="font-weight:600;">${r["Referencia"] || r["Código"]}</p>
+                  <p class="op">Ingresó ${r["Ingresó"]} · ${r["Fecha"]} ${r["Hora"] || ""}</p>
+                  ${r["Observación"] ? `<p class="op">${r["Observación"]}</p>` : ""}
+                </div>`;
+            }
+            return `
+              <div class="req-item">
+                <div class="fila">
+                  <span class="reqid">${r.ID}</span>
+                  <span class="badge badge-${claseEstado(r.Estado)}">${r.Estado}${r["Empresa"] ? " · " + r["Empresa"] : ""}</span>
+                </div>
+                <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
+                ${detalleRequisicion(r, mod)}
+              </div>`;
+          }).join("");
     }
 
     async function cargar() {
-      // Sin filtrar por empresa: en un módulo de "Ambas" (Insumos/Estibas)
-      // esto trae Contubos y Tecnipapel juntos, y como cada tarjeta ya
-      // muestra la empresa en la etiqueta, sigue siendo claro cuál es cuál —
-      // así no hay que ir cambiando el chip para revisar el historial completo.
-      const reqData = await apiGet("getRequisiciones", { modulo: mod.key, empresa: "" });
-      todas = (reqData.items || []).slice().sort((a, b) => {
-        const claveA = String(a["Fecha entrega"] || a["Fecha"] || "") + " " + String(a["Hora entrega"] || a["Hora"] || "");
-        const claveB = String(b["Fecha entrega"] || b["Fecha"] || "") + " " + String(b["Hora entrega"] || b["Hora"] || "");
-        return claveB.localeCompare(claveA);
-      });
+      // Una sola llamada combinada (requisiciones + ingresos) en vez de 2
+      // simultáneas. Sin filtrar por empresa: en un módulo de "Ambas"
+      // (Insumos/Estibas) esto trae Contubos y Tecnipapel juntos, y como cada
+      // tarjeta ya muestra la empresa en la etiqueta, sigue siendo claro cuál
+      // es cuál — así no hay que ir cambiando el chip para revisar el
+      // historial completo.
+      const datos = await apiGet("getHistorial", { modulo: mod.key, empresa: "" });
+      const reqs = (datos.requisiciones || []).map((r) => ({
+        tipo: "requisicion",
+        clave: String(r["Fecha entrega"] || r["Fecha"] || "") + " " + String(r["Hora entrega"] || r["Hora"] || ""),
+        datos: r,
+      }));
+      const ingresos = (datos.ingresos || []).map((r) => ({
+        tipo: "ingreso",
+        clave: String(r["Fecha"] || "") + " " + String(r["Hora"] || ""),
+        datos: r,
+      }));
+      todas = reqs.concat(ingresos).sort((a, b) => b.clave.localeCompare(a.clave));
       render(document.getElementById("buscador").value);
     }
 
