@@ -54,7 +54,17 @@ async function intentarLogin() {
     guardarSesion(usuario);
     window.location.href = "home.html";
   } catch (err) {
-    mostrarError("errorMsg", "PIN incorrecto. Intenta de nuevo.");
+    // "PIN no encontrado" es el único error que de verdad significa "PIN
+    // incorrecto" (lo lanza el propio backend). Cualquier otro error (falla
+    // de conexión, la respuesta de Google que a veces no llega bien) es un
+    // problema distinto — decir "PIN incorrecto" en ese caso confunde a la
+    // persona, que va a pensar que escribió mal su PIN cuando en realidad
+    // puede que estuviera bien.
+    if (err.message === "PIN no encontrado") {
+      mostrarError("errorMsg", "PIN incorrecto. Intenta de nuevo.");
+    } else {
+      mostrarError("errorMsg", "No se pudo conectar. Intenta de nuevo en unos segundos.");
+    }
     pin = "";
     actualizarDots();
   }
