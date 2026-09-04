@@ -74,7 +74,13 @@
     // - Producción ve sus propias requisiciones con el estado actual.
     async function cargarResumen() {
       const cont = document.getElementById("seccionResumen");
-      const reqData = await apiGet("getRequisiciones", { modulo: mod.key });
+      // silencioso:true evita el overlay de pantalla completa: los botones de
+      // acción de arriba ya están listos para usarse, no tiene sentido
+      // bloquear toda la pantalla mientras se carga solo el resumen de abajo.
+      // Mientras tanto se muestra un texto simple aquí mismo, para que no
+      // parezca que la pantalla se quedó "pegada".
+      cont.innerHTML = '<p style="font-size:13px;color:var(--gris);margin-top:20px;">Cargando resumen...</p>';
+      const reqData = await apiGet("getRequisiciones", { modulo: mod.key }, { silencioso: true });
       const items = reqData.items || [];
       const cantSolHeader = buscarEncabezado(items[0], "Cantidad solicitada");
 
