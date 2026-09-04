@@ -171,15 +171,19 @@ async function apiPost(accion, datos, opts) {
   const silencioso = opts && opts.silencioso;
   if (!silencioso) mostrarCargando(MENSAJES_CARGA[accion] || "Procesando...");
   try {
-    // Los POST (crear/entregar/devolver) NO se reintentan automáticamente:
-    // si la primera petición sí se guardó en la hoja pero la respuesta se
-    // perdió, reintentar duplicaría la entrega/devolución. Si falla, hay que
-    // revisar la hoja antes de volver a intentar manualmente.
+    // Los POST que SÍ cambian datos (crear/entregar/devolver/ingresar stock)
+    // NO se reintentan automáticamente: si la primera petición sí se guardó
+    // en la hoja pero la respuesta se perdió, reintentar duplicaría la
+    // operación. "login" es la única excepción — es de solo lectura, no
+    // cambia nada, así que si el problema intermitente de Google pega justo
+    // ahí, es seguro reintentarlo solo en vez de que la persona piense que
+    // escribió mal su PIN.
+    const reintentos = accion === "login" ? 2 : 0;
     return await fetchConReintento(() => fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(body),
-    }), 0);
+    }), reintentos);
   } finally {
     if (!silencioso) ocultarCargando();
   }
