@@ -79,7 +79,7 @@
               <form onsubmit="return entregar(event, '${r.ID}')">
                 <input type="number" placeholder="Cantidad entregada (${mod.unitLabel})${r.Estado === "Entregado parcial" ? " · faltan " + saldo : ""}" class="inp-cant" step="0.01" min="0" required>
                 <input type="text" placeholder="Operario de producción que recibe" class="inp-recibe" required>
-                <button class="btn btn-primary">Entregar</button>
+                <button class="btn btn-entregar">Entregar</button>
               </form>
             </div>`;
           }).join("");

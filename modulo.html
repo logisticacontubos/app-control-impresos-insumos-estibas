@@ -97,11 +97,15 @@
                 <p class="op" style="color:var(--magenta);font-weight:700;margin-top:6px;">Toca para entregar &#8594;</p>
               </a>`).join(""));
       } else if (usuario.rol === "produccion") {
-        const misReq = items.filter((r) => r["Solicitó"] === usuario.nombre)
+        // Solo las pendientes (o parcialmente entregadas) — las que ya están
+        // resueltas ("Entregado" completo) se dejan de mostrar aquí; para
+        // verlas completas está "Historial de movimientos".
+        const misReq = items.filter((r) => r["Solicitó"] === usuario.nombre &&
+            (r.Estado === "Pendiente" || r.Estado === "Entregado parcial"))
           .sort((a, b) => String(b.Fecha).localeCompare(String(a.Fecha)));
-        cont.innerHTML = `<p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Mis requisiciones</p>` +
+        cont.innerHTML = `<p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Mis requisiciones pendientes</p>` +
           (misReq.length === 0
-            ? '<p style="font-size:13px;color:var(--gris);">Todavía no has creado ninguna requisición.</p>'
+            ? '<p style="font-size:13px;color:var(--gris);">No tienes requisiciones pendientes.</p>'
             : misReq.map((r) => `
               <div class="req-item">
                 <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-${claseEstado(r.Estado)}">${r.Estado}</span></div>

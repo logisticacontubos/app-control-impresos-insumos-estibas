@@ -16,6 +16,18 @@
     </div>
   </header>
   <main>
+    <div class="chip-row" id="filtrosFecha" style="margin-bottom:10px;">
+      <span class="chip" data-rango="hoy">Hoy</span>
+      <span class="chip" data-rango="ayer">Ayer</span>
+      <span class="chip" data-rango="semana">Semana</span>
+      <span class="chip" data-rango="mes">Mes</span>
+      <span class="chip" data-rango="todo">Todo</span>
+      <span class="chip" data-rango="personalizado">Fechas abiertas</span>
+    </div>
+    <div id="rangoPersonalizado" style="display:none;gap:8px;margin:0 0 12px;">
+      <input type="date" id="fechaDesde" style="flex:1;">
+      <input type="date" id="fechaHasta" style="flex:1;">
+    </div>
     <input type="text" id="buscador" placeholder="Buscar por ID, referencia o quién solicitó...">
     <div id="lista"></div>
   </main>
@@ -30,6 +42,40 @@
     document.getElementById("sub").textContent = mod.label + " · trazabilidad completa";
 
     let todas = [];
+    let rangoActivo = "todo";
+
+    // Calcula el rango de fechas (strings "yyyy-MM-dd", comparables con <= y
+    // >= porque el formato ISO ordena igual alfabética que cronológicamente)
+    // para cada filtro rápido. "Semana" = desde el lunes de esta semana hasta
+    // hoy: "Mes" = desde el día 1 del mes actual hasta hoy.
+    function rangoFecha(modo) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const fmt = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      if (modo === "hoy") return { desde: fmt(hoy), hasta: fmt(hoy) };
+      if (modo === "ayer") {
+        const ayer = new Date(hoy);
+        ayer.setDate(ayer.getDate() - 1);
+        return { desde: fmt(ayer), hasta: fmt(ayer) };
+      }
+      if (modo === "semana") {
+        const inicio = new Date(hoy);
+        const diaSemana = (inicio.getDay() + 6) % 7; // lunes = 0
+        inicio.setDate(inicio.getDate() - diaSemana);
+        return { desde: fmt(inicio), hasta: fmt(hoy) };
+      }
+      if (modo === "mes") {
+        const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        return { desde: fmt(inicio), hasta: fmt(hoy) };
+      }
+      if (modo === "personalizado") {
+        const desde = document.getElementById("fechaDesde").value;
+        const hasta = document.getElementById("fechaHasta").value;
+        if (!desde && !hasta) return null;
+        return { desde: desde || "0000-00-00", hasta: hasta || "9999-99-99" };
+      }
+      return null; // "todo"
+    }
 
     // Historial completo de movimientos, mezclando dos tipos de eventos:
     // - "requisicion": quién creó cada requisición y cuándo, quién la
@@ -41,13 +87,24 @@
     // pendientes que ya se ve en Bodega/Módulo.
     function render(filtro) {
       const f = (filtro || "").trim().toLowerCase();
-      const items = !f ? todas : todas.filter((x) => {
-        const r = x.datos;
-        return String(r.ID || "").toLowerCase().includes(f) ||
-          String(r["Referencia"] || "").toLowerCase().includes(f) ||
-          String(r["Solicitó"] || "").toLowerCase().includes(f) ||
-          String(r["Ingresó"] || "").toLowerCase().includes(f);
-      });
+      const rango = rangoFecha(rangoActivo);
+
+      let items = todas;
+      if (rango) {
+        items = items.filter((x) => {
+          const fecha = x.clave.slice(0, 10);
+          return fecha >= rango.desde && fecha <= rango.hasta;
+        });
+      }
+      if (f) {
+        items = items.filter((x) => {
+          const r = x.datos;
+          return String(r.ID || "").toLowerCase().includes(f) ||
+            String(r["Referencia"] || "").toLowerCase().includes(f) ||
+            String(r["Solicitó"] || "").toLowerCase().includes(f) ||
+            String(r["Ingresó"] || "").toLowerCase().includes(f);
+        });
+      }
 
       document.getElementById("lista").innerHTML = items.length === 0
         ? '<p style="font-size:13px;color:var(--gris);margin-top:16px;">No hay movimientos que coincidan.</p>'
@@ -100,6 +157,23 @@
     }
 
     document.getElementById("buscador").addEventListener("input", (e) => render(e.target.value));
+
+    // Chips de filtro rápido por fecha — "Fechas abiertas" muestra los 2
+    // campos de fecha personalizados, los demás filtran directo con un clic.
+    document.querySelectorAll("#filtrosFecha .chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        rangoActivo = chip.dataset.rango;
+        document.querySelectorAll("#filtrosFecha .chip").forEach((c) => c.classList.toggle("on", c === chip));
+        document.getElementById("rangoPersonalizado").style.display = rangoActivo === "personalizado" ? "flex" : "none";
+        render(document.getElementById("buscador").value);
+      });
+    });
+    document.getElementById("fechaDesde").addEventListener("change", () => render(document.getElementById("buscador").value));
+    document.getElementById("fechaHasta").addEventListener("change", () => render(document.getElementById("buscador").value));
+
+    // "Todo" activo por defecto, para no ocultar nada al entrar.
+    document.querySelector('#filtrosFecha .chip[data-rango="todo"]').classList.add("on");
+
     cargar();
   }
 </script>
