@@ -182,6 +182,11 @@ textarea{resize:vertical;}
   text-decoration:none;
 }
 .btn-primary{background:var(--magenta);color:#fff;}
+/* Botón de "Entregar" en Bodega — a propósito de otro color que "Registrar
+   devolución" (que sigue en rojo/magenta), para que de un vistazo se note
+   cuál acción es cuál: naranja = entregar (acción principal, va arriba),
+   rojo = devolución (acción secundaria, va abajo). */
+.btn-entregar{background:#E8890C;color:#fff;}
 .btn-secondary{background:#fff;color:var(--texto);box-shadow:0 6px 18px rgba(26,26,26,0.12);}
 .btn-danger{background:var(--rojo-fondo);color:var(--rojo);}
 .btn-row{display:flex;gap:10px;}
