@@ -349,7 +349,12 @@ function detalleRequisicion(r, mod) {
   // Fecha/hora de creación, para poder ver de un vistazo hace cuánto está
   // pendiente una requisición sin tener que entrar al reporte.
   const fechaSol = r["Fecha"] ? r["Fecha"] + (r["Hora"] ? " " + r["Hora"] : "") : "";
-  lineas.push(`Solicitó ${r["Solicitó"]} · ${r[cantSolHeader] || 0} ${mod.unitLabel} pedidos${fechaSol ? " · " + fechaSol : ""}`);
+  // Ojo: se muestra "solicitada" (ya convertida con Number(...)) y no el
+  // valor crudo de la celda. Si alguien escribe la cantidad de una forma que
+  // Google Sheets interpreta como fecha (p.ej. "6-3"), la celda queda
+  // guardada como fecha y mostrar el texto crudo saca cosas como
+  // "2026-03-06 kg pedidos" en vez de la cantidad real.
+  lineas.push(`Solicitó ${r["Solicitó"]} · ${solicitada} ${mod.unitLabel} pedidos${fechaSol ? " · " + fechaSol : ""}`);
   if (motivoHeader && r[motivoHeader]) {
     lineas.push(`Motivo: ${r[motivoHeader]}`);
   }
