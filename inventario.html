@@ -8,7 +8,7 @@
 </head>
 <body>
 <div class="app">
-  <header class="topbar">
+  <header class="topbar no-imprimir">
     <a class="back" id="backLink" href="modulo.html">&#8592;</a>
     <div>
       <h1 id="titulo">Inventario</h1>
@@ -16,25 +16,65 @@
     </div>
   </header>
   <main>
-    <div id="lista"></div>
+    <div class="encabezado-pdf solo-impresion">
+      <img id="logoPdf" src="" alt="">
+      <div class="txt">
+        <h2 id="tituloPdf">Inventario</h2>
+        <p id="subPdf"></p>
+      </div>
+    </div>
+
+    <div class="btn-row no-imprimir" style="margin-bottom:12px;">
+      <button class="btn btn-secondary" id="btnExcel">Descargar Excel</button>
+      <button class="btn btn-secondary" id="btnPdf">Descargar PDF</button>
+    </div>
+
+    <!-- Tabla para imprimir/PDF — el gauge visual de abajo no se ve bien
+         impreso, así que el PDF/impresión usa una tabla simple en su lugar. -->
+    <div class="solo-impresion" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr style="background:var(--fondo);text-align:left;">
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Código</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Referencia</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Stock actual</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Óptimo</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Estado</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyImpresion"></tbody>
+      </table>
+    </div>
+
+    <div id="lista" class="no-imprimir"></div>
   </main>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/app.js"></script>
 <script>
   const ctx = requiereModulo();
   if (ctx) {
-    const { mod } = ctx;
+    const { mod, empresaActual } = ctx;
     document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
     document.getElementById("titulo").textContent = "Inventario";
     document.getElementById("sub").textContent = mod.label;
+    document.getElementById("logoPdf").src = empresaActual === "Tecnipapel" ? "assets/logo-tecnipapel.png" : "assets/logo-contubos.png";
+    document.getElementById("tituloPdf").textContent = "Inventario · " + mod.label;
+
+    let ultimosItems = [];
+    let ultimosHeaders = {};
 
     async function cargar() {
       const invData = await apiGet("getInventario", { modulo: mod.key });
       const items = invData.items || [];
+      ultimosItems = items;
       const codigoHeader = buscarEncabezado(items[0], "Código");
       const refHeader = buscarEncabezado(items[0], "Referencia");
       const stockHeader = buscarEncabezado(items[0], "Stock actual");
       const optimoHeader = buscarEncabezado(items[0], "Óptimo");
+      ultimosHeaders = { codigoHeader, refHeader, stockHeader, optimoHeader };
+
+      document.getElementById("subPdf").textContent = empresaActual + " · generado " + fechaHoy();
 
       document.getElementById("lista").innerHTML = items.length === 0
         ? '<p style="font-size:13px;color:var(--gris);">Sin datos de inventario todavía.</p>'
@@ -55,8 +95,40 @@
                 </div>
               </div>`;
           }).join("");
+
+      const celda = (v) => `<td style="padding:6px 8px;border:1px solid var(--borde);">${v}</td>`;
+      document.getElementById("tbodyImpresion").innerHTML = items.length === 0
+        ? `<tr><td colspan="5" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">Sin datos de inventario todavía.</td></tr>`
+        : items.map((it) => "<tr>" +
+            celda(it[codigoHeader] || "") + celda(it[refHeader] || "") +
+            celda((it[stockHeader] || 0) + " " + mod.unitLabel) + celda(it[optimoHeader] || "") +
+            celda(it["Estado"] || "") + "</tr>").join("");
     }
     cargar();
+
+    // Descarga en Excel: una sola hoja con el inventario actual tal como se
+    // ve en pantalla (código, referencia, stock, óptimo, estado).
+    document.getElementById("btnExcel").addEventListener("click", () => {
+      if (ultimosItems.length === 0) return;
+      const { codigoHeader, refHeader, stockHeader, optimoHeader } = ultimosHeaders;
+      const wb = XLSX.utils.book_new();
+      const filas = [
+        ["Inventario", mod.label, empresaActual, "Generado " + fechaHoy()],
+        [],
+        ["Código", "Referencia", "Stock actual (" + mod.unitLabel + ")", "Óptimo", "Estado"],
+        ...ultimosItems.map((it) => [it[codigoHeader], it[refHeader], it[stockHeader], it[optimoHeader], it["Estado"]]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filas), "Inventario");
+      const nombre = `Inventario_${mod.label}_${empresaActual}_${fechaHoy()}.xlsx`;
+      XLSX.writeFile(wb, nombre);
+    });
+
+    // Descarga en PDF: usa el diálogo de impresión del navegador (Guardar como
+    // PDF), igual que en Reporte y KPI's — con logo/color de la empresa y sin
+    // los controles/botones.
+    document.getElementById("btnPdf").addEventListener("click", () => {
+      window.print();
+    });
   }
 </script>
 </body>
