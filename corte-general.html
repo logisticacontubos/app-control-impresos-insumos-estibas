@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corte mensual de inventario · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="inventario.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Corte mensual de inventario</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <div class="error-msg" id="errorMsg"></div>
+    <div id="contenido"></div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { usuario, mod, empresaActual } = ctx;
+    document.getElementById("backLink").href = "inventario.html?modulo=" + mod.key;
+    document.getElementById("sub").textContent = mod.label + " · " + empresaActual;
+
+    if (!puedeRegistrarCorte(usuario.rol)) {
+      document.getElementById("contenido").innerHTML = '<p style="font-size:13px;color:var(--gris);margin-top:20px;">No tienes permiso para hacer el corte de inventario en este módulo.</p>';
+    } else {
+      let estado = null; // { loteId, unitLabel, totalItems, itemsContados, items: [...] }
+      let filtroActivo = "todos";
+
+      function estadoItem(it) {
+        if (it.cantidadContada === "" || it.cantidadContada === null || it.cantidadContada === undefined) return "pendiente";
+        const dif = redondear2(Number(it.cantidadContada) - Number(it.cantidadSistema));
+        return dif !== 0 ? "diferencia" : "contado";
+      }
+      function redondear2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+
+      function render() {
+        const totalItems = estado.items.length;
+        const contados = estado.items.filter((it) => estadoItem(it) !== "pendiente").length;
+        const conDiferencia = estado.items.filter((it) => estadoItem(it) === "diferencia").length;
+        const pct = totalItems === 0 ? 0 : Math.round((contados / totalItems) * 100);
+        const todosContados = contados === totalItems && totalItems > 0;
+
+        const visibles = estado.items.filter((it) => {
+          if (filtroActivo === "todos") return true;
+          return estadoItem(it) === filtroActivo;
+        });
+
+        document.getElementById("contenido").innerHTML = `
+          <div class="progreso-corte">
+            <div class="fila-top"><span>Ítems contados</span><b>${contados} de ${totalItems}</b></div>
+            <div class="progreso"><div class="barra"><div class="fill" style="width:${pct}%;"></div></div><span class="txt">${pct}%</span></div>
+          </div>
+          <div class="chip-row">
+            <span class="chip ${filtroActivo === "todos" ? "on" : ""}" data-filtro="todos">Todos (${totalItems})</span>
+            <span class="chip ${filtroActivo === "pendiente" ? "on" : ""}" data-filtro="pendiente">Pendientes (${totalItems - contados})</span>
+            <span class="chip ${filtroActivo === "contado" ? "on" : ""}" data-filtro="contado">Contados (${contados - conDiferencia})</span>
+            <span class="chip ${filtroActivo === "diferencia" ? "on" : ""}" data-filtro="diferencia">Con diferencia (${conDiferencia})</span>
+          </div>
+          <div id="listaItems"></div>
+          ${todosContados
+            ? `<button class="btn btn-primary" id="btnFinalizar">Finalizar corte y generar reporte</button>
+               <p style="font-size:11px;color:var(--gris);text-align:center;margin:8px 0 0;">Esto ajusta el stock de cada ítem con diferencia y lo deja registrado en su historial.</p>`
+            : `<button class="btn btn-primary" disabled>Finalizar corte (faltan ${totalItems - contados} ítems)</button>
+               <p style="font-size:11px;color:var(--gris);text-align:center;margin:8px 0 0;">Puedes salir y seguir después — lo ya contado queda guardado.</p>`}
+          <a href="historial-cortes-generales.html?modulo=${mod.key}" class="link-mini" style="display:block;text-align:center;margin-top:14px;">Ver historial de cortes anteriores</a>
+        `;
+
+        document.getElementById("listaItems").innerHTML = visibles.length === 0
+          ? '<p style="font-size:13px;color:var(--gris);margin-top:10px;">No hay ítems en este filtro.</p>'
+          : visibles.map((it, idx) => {
+              const est = estadoItem(it);
+              const idxReal = estado.items.indexOf(it);
+              const dif = it.cantidadContada === "" ? null : redondear2(Number(it.cantidadContada) - Number(it.cantidadSistema));
+              return `
+                <div class="req-item item-corte ${est === "contado" ? "contado" : ""} ${est === "diferencia" ? "diferencia" : ""}" style="margin-bottom:10px;">
+                  <div class="fila">
+                    <span class="reqid" style="font-size:14px;">${it.referencia || it.codigo}</span>
+                    <span class="badge badge-${est === "pendiente" ? "Pendiente" : est === "diferencia" ? "Ajustado" : "Óptimo"}">${est === "pendiente" ? "Pendiente" : est === "diferencia" ? "Diferencia" : "Sin diferencia"}</span>
+                  </div>
+                  <p class="op" style="margin-bottom:8px;">${it.codigo}${it.empresa ? " · " + it.empresa : ""}</p>
+                  <div class="campos-corte">
+                    <div class="campo"><label>Sistema</label><div class="solo-lectura">${it.cantidadSistema} ${estado.unitLabel}</div></div>
+                    <div class="campo"><label>Contado</label><input type="number" step="0.01" min="0" placeholder="0" value="${it.cantidadContada}" data-idx="${idxReal}" class="inpContado"></div>
+                  </div>
+                  ${dif !== null ? `<p class="dif-linea ${dif === 0 ? "pos" : "neg"}">${dif === 0 ? "Coincide con el sistema." : "Diferencia: " + (dif > 0 ? "+" : "") + dif + " " + estado.unitLabel + (dif > 0 ? " (sobrante)" : " (faltante)")}</p>` : ""}
+                  ${dif !== 0 && dif !== null ? `<p class="obs-label">Comentario obligatorio — hay diferencia</p><textarea rows="2" class="inpObservacion" data-idx="${idxReal}" placeholder="Ej: rollo húmedo descartado...">${it.observacion || ""}</textarea><button class="btn btn-secondary btnGuardarConteo" data-idx="${idxReal}" style="margin-top:-6px;">Guardar este ítem</button>` : ""}
+                  ${dif === 0 ? `<button class="btn btn-secondary btnGuardarConteo" data-idx="${idxReal}" style="margin-top:6px;">Guardar este ítem</button>` : ""}
+                </div>`;
+            }).join("");
+
+        document.querySelectorAll(".btnGuardarConteo").forEach((btn) => {
+          btn.addEventListener("click", () => guardarConteo(Number(btn.dataset.idx)));
+        });
+        document.querySelectorAll(".chip[data-filtro]").forEach((chip) => {
+          chip.addEventListener("click", () => { filtroActivo = chip.dataset.filtro; render(); });
+        });
+        if (todosContados) {
+          document.getElementById("btnFinalizar").addEventListener("click", finalizar);
+        }
+      }
+
+      async function guardarConteo(idx) {
+        const errorEl = document.getElementById("errorMsg");
+        errorEl.style.display = "none";
+        const it = estado.items[idx];
+        const inputCant = document.querySelector(`.inpContado[data-idx="${idx}"]`);
+        const inputObs = document.querySelector(`.inpObservacion[data-idx="${idx}"]`);
+        const cantidad = inputCant ? inputCant.value : "";
+        const observacion = inputObs ? inputObs.value : "";
+        if (cantidad === "" || Number(cantidad) < 0) {
+          errorEl.textContent = "Ingresa una cantidad contada válida para " + (it.referencia || it.codigo) + ".";
+          errorEl.style.display = "block";
+          return;
+        }
+        try {
+          const res = await apiPost("guardarConteoGeneral", {
+            modulo: mod.key,
+            loteId: estado.loteId,
+            codigo: it.codigo,
+            cantidadContada: cantidad,
+            observacion: observacion,
+            registro: usuario.nombre,
+          });
+          it.cantidadContada = Number(cantidad);
+          it.observacion = observacion;
+          estado.itemsContados = res.itemsContados;
+          mostrarToast("Guardado: " + (it.referencia || it.codigo));
+          render();
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.style.display = "block";
+        }
+      }
+
+      async function finalizar() {
+        try {
+          const res = await apiPost("finalizarCorteGeneral", { modulo: mod.key, loteId: estado.loteId, registro: usuario.nombre });
+          window.location.href = "reporte-corte-general.html?modulo=" + mod.key + "&loteId=" + encodeURIComponent(res.loteId);
+        } catch (err) {
+          document.getElementById("errorMsg").textContent = err.message;
+          document.getElementById("errorMsg").style.display = "block";
+        }
+      }
+
+      async function cargar() {
+        try {
+          estado = await apiGet("iniciarCorteGeneral", { modulo: mod.key, empresa: "", registro: usuario.nombre });
+          render();
+        } catch (err) {
+          document.getElementById("contenido").innerHTML =
+            `<p style="font-size:13px;color:var(--rojo);margin-top:16px;">No se pudo cargar el corte: ${err.message}</p>
+             <button class="btn btn-secondary" onclick="cargar()" style="margin-top:8px;">Reintentar</button>`;
+        }
+      }
+      window.cargar = cargar;
+      cargar();
+    }
+  }
+</script>
+</body>
+</html>

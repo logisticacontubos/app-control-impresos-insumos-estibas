@@ -111,6 +111,11 @@ const MENSAJES_CARGA = {
   getIngresos: "Cargando ingresos...",
   getHistorialItem: "Cargando historial...",
   registrarCorte: "Registrando corte...",
+  iniciarCorteGeneral: "Cargando corte de inventario...",
+  guardarConteoGeneral: "Guardando conteo...",
+  finalizarCorteGeneral: "Finalizando corte...",
+  getHistorialCortesGenerales: "Cargando historial de cortes...",
+  getReporteCorteGeneral: "Cargando reporte...",
 };
 let _cargasActivas = 0;
 function mostrarCargando(mensaje) {

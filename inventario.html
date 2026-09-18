@@ -24,10 +24,11 @@
       </div>
     </div>
 
-    <div class="btn-row no-imprimir" style="margin-bottom:12px;">
+    <div class="btn-row no-imprimir" style="margin-bottom:10px;">
       <button class="btn btn-secondary" id="btnExcel">Descargar Excel</button>
       <button class="btn btn-secondary" id="btnPdf">Descargar PDF</button>
     </div>
+    <a class="btn no-imprimir" id="btnCorteGeneral" href="#" style="display:none;text-decoration:none;text-align:center;margin-bottom:12px;background:linear-gradient(135deg,var(--magenta),#8f0d38);color:#fff;">&#128203; Corte mensual de inventario</a>
 
     <!-- Tabla para imprimir/PDF — el gauge visual de abajo no se ve bien
          impreso, así que el PDF/impresión usa una tabla simple en su lugar. -->
@@ -66,6 +67,12 @@
     document.getElementById("sub").textContent = mod.label;
     document.getElementById("logoPdf").src = empresaActual === "Tecnipapel" ? "assets/logo-tecnipapel.png" : "assets/logo-contubos.png";
     document.getElementById("tituloPdf").textContent = "Inventario · " + mod.label;
+
+    if (puedeRegistrarCorte(usuario.rol)) {
+      const btnCG = document.getElementById("btnCorteGeneral");
+      btnCG.href = "corte-general.html?modulo=" + mod.key;
+      btnCG.style.display = "block";
+    }
 
     let ultimosItems = [];
     let ultimosHeaders = {};

@@ -14,6 +14,8 @@ const MODULES = {
     devoluciones: "Impresos_Devoluciones",
     ingresos: "Impresos_Ingresos",
     cortes: "Impresos_Cortes",
+    cortesGenerales: "Impresos_CortesGenerales",
+    corteGeneralItems: "Impresos_CorteGeneralItems",
     empresas: ["Contubos"],
     hasDevolucion: true,
     unitLabel: "kg",
@@ -25,6 +27,8 @@ const MODULES = {
     devoluciones: null,
     ingresos: "Insumos_Ingresos",
     cortes: "Insumos_Cortes",
+    cortesGenerales: "Insumos_CortesGenerales",
+    corteGeneralItems: "Insumos_CorteGeneralItems",
     empresas: ["Contubos", "Tecnipapel"],
     hasDevolucion: false,
     unitLabel: "un.",
@@ -36,6 +40,8 @@ const MODULES = {
     devoluciones: null,
     ingresos: "Estibas_Ingresos",
     cortes: "Estibas_Cortes",
+    cortesGenerales: "Estibas_CortesGenerales",
+    corteGeneralItems: "Estibas_CorteGeneralItems",
     empresas: ["Contubos", "Tecnipapel"],
     hasDevolucion: false,
     unitLabel: "un.",
@@ -79,6 +85,11 @@ function manejar(p) {
       case "getHistorial": data = accionGetHistorial(p); break;
       case "getHistorialItem": data = accionGetHistorialItem(p); break;
       case "registrarCorte": data = accionRegistrarCorte(p); break;
+      case "iniciarCorteGeneral": data = accionIniciarCorteGeneral(p); break;
+      case "guardarConteoGeneral": data = accionGuardarConteoGeneral(p); break;
+      case "finalizarCorteGeneral": data = accionFinalizarCorteGeneral(p); break;
+      case "getHistorialCortesGenerales": data = accionGetHistorialCortesGenerales(p); break;
+      case "getReporteCorteGeneral": data = accionGetReporteCorteGeneral(p); break;
       default: throw new Error("Acción desconocida: " + p.accion);
     }
     return responder(true, data, null);
@@ -464,6 +475,309 @@ function accionRegistrarCorte(p) {
   agregarFila(mod.cortes, hojaCortes, fila);
 
   return { ok: true, id: id, diferencia: diferencia, stockOk: stockOk };
+}
+
+// ==========================================================
+// CORTE GENERAL DE INVENTARIO (mensual) — cuenta TODOS los ítems del módulo
+// de una sola vez, en vez de uno por uno. Se guarda como "lote": mientras se
+// va contando queda en la hoja "<Módulo>_CorteGeneralItems" como borrador
+// (no toca el stock todavía, así se puede ir guardando de a poco y seguir
+// después). Al "finalizar", cada ítem contado se procesa igual que un corte
+// individual (accionRegistrarCorte): ajusta el stock si hay diferencia y
+// queda registrado en "<Módulo>_Cortes" para la trazabilidad de ese ítem —
+// y además se guarda el resumen del lote en "<Módulo>_CortesGenerales".
+// ==========================================================
+
+const HEADERS_CORTE_GENERAL_ITEMS = ["Lote", "Código", "Referencia", "Cantidad sistema (al contar)", "Cantidad contada", "Observación", "Contado por", "Fecha", "Hora"];
+const HEADERS_CORTES_GENERALES = ["ID", "Fecha inicio", "Hora inicio", "Iniciado por", "Estado", "Fecha fin", "Hora fin", "Ítems totales", "Ítems contados", "Ítems con diferencia", "Ajuste neto", "Empresa"];
+
+// Devuelve el lote "En progreso" más reciente del módulo, o crea uno nuevo si
+// no hay ninguno abierto — así, si alguien ya empezó a contar hoy y cierra la
+// app, al volver a entrar sigue con el mismo lote en vez de crear uno nuevo.
+function obtenerOCrearLoteActivo(mod, p) {
+  const hojaLotes = obtenerOCrearHoja(mod.cortesGenerales, HEADERS_CORTES_GENERALES);
+  let lote = hojaLotes.rows.find((r) => r["Estado"] === "En progreso");
+  if (lote) return lote;
+
+  const hojaInv = leerHoja(mod.inventario);
+  let maxNum = 0;
+  hojaLotes.rows.forEach((r) => {
+    const m = String(r["ID"] || "").match(new RegExp("^" + mod.prefijo + "-CG-(\\d+)$"));
+    if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+  });
+  const id = mod.prefijo + "-CG-" + String(maxNum + 1).padStart(4, "0");
+  const fila = {
+    ID: id,
+    "Fecha inicio": fechaHoy(),
+    "Hora inicio": horaAhora(),
+    "Iniciado por": p.registro || "",
+    Estado: "En progreso",
+    "Fecha fin": "",
+    "Hora fin": "",
+    "Ítems totales": hojaInv.rows.length,
+    "Ítems contados": 0,
+    "Ítems con diferencia": 0,
+    "Ajuste neto": 0,
+    Empresa: p.empresa || "",
+  };
+  agregarFila(mod.cortesGenerales, hojaLotes, fila);
+  return fila;
+}
+
+// Trae (o crea) el lote activo, junto con TODOS los ítems del inventario del
+// módulo y lo que ya se haya contado en ese lote — para pintar la pantalla
+// completa del corte de una vez (igual que getBodegaDatos: una sola llamada).
+function accionIniciarCorteGeneral(p) {
+  const mod = MODULES[p.modulo];
+  if (!mod) throw new Error("Módulo inválido");
+
+  const lote = obtenerOCrearLoteActivo(mod, p);
+
+  const hojaInv = leerHoja(mod.inventario);
+  let itemsInv = hojaInv.rows;
+  if (p.empresa) itemsInv = itemsInv.filter((r) => !r["Empresa"] || r["Empresa"] === p.empresa || r["Empresa"] === "Ambas");
+  const codigoInvHeader = buscarEncabezado(hojaInv.headers, "Código");
+  const refInvHeader = buscarEncabezado(hojaInv.headers, "Referencia");
+  const stockInvHeader = buscarEncabezado(hojaInv.headers, "Stock actual");
+
+  const hojaItemsLote = obtenerOCrearHoja(mod.corteGeneralItems, HEADERS_CORTE_GENERAL_ITEMS);
+  const conteosPorCodigo = {};
+  hojaItemsLote.rows
+    .filter((r) => r["Lote"] === lote["ID"])
+    .forEach((r) => { conteosPorCodigo[String(r["Código"] || "").trim().toLowerCase()] = r; });
+
+  const items = itemsInv.map((it) => {
+    const codigo = it[codigoInvHeader];
+    const yaContado = conteosPorCodigo[String(codigo || "").trim().toLowerCase()];
+    return {
+      codigo: codigo,
+      referencia: it[refInvHeader],
+      empresa: it["Empresa"] || "",
+      cantidadSistema: stockInvHeader ? redondear2(Number(it[stockInvHeader]) || 0) : 0,
+      cantidadContada: yaContado ? yaContado["Cantidad contada"] : "",
+      observacion: yaContado ? yaContado["Observación"] || "" : "",
+    };
+  });
+
+  const contados = items.filter((it) => it.cantidadContada !== "" && it.cantidadContada !== null && it.cantidadContada !== undefined).length;
+
+  return {
+    loteId: lote["ID"],
+    fechaInicio: lote["Fecha inicio"],
+    unitLabel: mod.unitLabel,
+    totalItems: items.length,
+    itemsContados: contados,
+    items: items,
+  };
+}
+
+// Guarda (o actualiza) el conteo de UN ítem dentro del lote activo — no toca
+// el stock todavía, es solo el borrador. Se llama cada vez que la persona
+// termina de escribir la cantidad contada de un ítem, así el progreso no se
+// pierde si cierra la app a la mitad.
+function accionGuardarConteoGeneral(p) {
+  const mod = MODULES[p.modulo];
+  if (!mod) throw new Error("Módulo inválido");
+  if (!p.loteId) throw new Error("Falta el lote del corte");
+  if (!p.codigo || p.cantidadContada === undefined || p.cantidadContada === "") throw new Error("Falta el ítem o la cantidad contada");
+  if (Number(p.cantidadContada) < 0) throw new Error("La cantidad contada no puede ser negativa");
+
+  const hojaInv = leerHoja(mod.inventario);
+  const codigoInvHeader = buscarEncabezado(hojaInv.headers, "Código");
+  const refInvHeader = buscarEncabezado(hojaInv.headers, "Referencia");
+  const stockInvHeader = buscarEncabezado(hojaInv.headers, "Stock actual");
+  const codigoBuscado = String(p.codigo || "").trim().toLowerCase();
+  const itemInv = hojaInv.rows.find((r) => String(r[codigoInvHeader] || "").trim().toLowerCase() === codigoBuscado);
+  if (!itemInv) throw new Error('El código "' + p.codigo + '" no existe en el inventario de este módulo.');
+
+  const cantidadSistema = stockInvHeader ? redondear2(Number(itemInv[stockInvHeader]) || 0) : 0;
+  const cantidadContada = redondear2(Number(p.cantidadContada));
+  const diferencia = redondear2(cantidadContada - cantidadSistema);
+  if (diferencia !== 0 && !(p.observacion || "").toString().trim()) {
+    throw new Error("Hay diferencia con el sistema (" + diferencia + " " + mod.unitLabel + ") — el comentario es obligatorio para poder guardarlo.");
+  }
+
+  const hojaItemsLote = obtenerOCrearHoja(mod.corteGeneralItems, HEADERS_CORTE_GENERAL_ITEMS);
+  const filaExistente = hojaItemsLote.rows.find((r) => r["Lote"] === p.loteId && String(r["Código"] || "").trim().toLowerCase() === codigoBuscado);
+  const valores = {
+    Lote: p.loteId,
+    "Código": itemInv[codigoInvHeader],
+    Referencia: refInvHeader ? itemInv[refInvHeader] : "",
+    "Cantidad sistema (al contar)": cantidadSistema,
+    "Cantidad contada": cantidadContada,
+    "Observación": p.observacion || "",
+    "Contado por": p.registro || "",
+    Fecha: fechaHoy(),
+    Hora: horaAhora(),
+  };
+  if (filaExistente) {
+    actualizarCeldas(mod.corteGeneralItems, hojaItemsLote.headers, filaExistente._row, valores);
+  } else {
+    agregarFila(mod.corteGeneralItems, hojaItemsLote, valores);
+  }
+
+  // Progreso actualizado del lote, para refrescar la barra sin tener que
+  // recargar toda la pantalla otra vez.
+  const hojaLotes = leerHoja(mod.cortesGenerales);
+  const lote = hojaLotes.rows.find((r) => r["ID"] === p.loteId);
+  const totalContados = hojaItemsLote.rows.filter((r) => r["Lote"] === p.loteId).length + (filaExistente ? 0 : 1);
+  if (lote) actualizarCeldas(mod.cortesGenerales, hojaLotes.headers, lote._row, { "Ítems contados": totalContados });
+
+  return { ok: true, diferencia: diferencia, itemsContados: totalContados };
+}
+
+// Cierra el lote: exige que TODOS los ítems del inventario tengan un conteo
+// guardado, y ahí sí aplica los ajustes de verdad — por cada ítem, igual que
+// un corte individual (misma validación de comentario obligatorio, mismo
+// ajuste de stock, misma fila en "<Módulo>_Cortes" para que quede en el
+// historial de ESE ítem también, no solo en el resumen del lote).
+function accionFinalizarCorteGeneral(p) {
+  const mod = MODULES[p.modulo];
+  if (!mod) throw new Error("Módulo inválido");
+  if (!p.loteId) throw new Error("Falta el lote del corte");
+
+  const hojaLotes = leerHoja(mod.cortesGenerales);
+  const lote = hojaLotes.rows.find((r) => r["ID"] === p.loteId);
+  if (!lote) throw new Error("Ese lote de corte no existe");
+  if (lote["Estado"] === "Finalizado") throw new Error("Este corte ya fue finalizado.");
+
+  const hojaInv = leerHoja(mod.inventario);
+  const codigoInvHeader = buscarEncabezado(hojaInv.headers, "Código");
+  const refInvHeader = buscarEncabezado(hojaInv.headers, "Referencia");
+  const stockInvHeader = buscarEncabezado(hojaInv.headers, "Stock actual");
+
+  const hojaItemsLote = obtenerOCrearHoja(mod.corteGeneralItems, HEADERS_CORTE_GENERAL_ITEMS);
+  const conteos = hojaItemsLote.rows.filter((r) => r["Lote"] === p.loteId);
+  const conteosPorCodigo = {};
+  conteos.forEach((r) => { conteosPorCodigo[String(r["Código"] || "").trim().toLowerCase()] = r; });
+
+  const faltantes = hojaInv.rows.filter((it) => !conteosPorCodigo[String(it[codigoInvHeader] || "").trim().toLowerCase()]);
+  if (faltantes.length > 0) {
+    throw new Error("Faltan " + faltantes.length + " ítem(s) por contar antes de poder finalizar el corte.");
+  }
+
+  const hojaCortes = obtenerOCrearHoja(mod.cortes, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad sistema", "Cantidad contada", "Diferencia", "Registró", "Empresa", "Observación", "Lote"]);
+  let maxNumCorte = 0;
+  hojaCortes.rows.forEach((r) => {
+    const m = String(r["ID"] || "").match(new RegExp("^" + mod.prefijo + "-COR-(\\d+)$"));
+    if (m) maxNumCorte = Math.max(maxNumCorte, parseInt(m[1], 10));
+  });
+
+  let itemsConDiferencia = 0;
+  let ajusteNeto = 0;
+  const detalle = [];
+
+  hojaInv.rows.forEach((it) => {
+    const codigo = it[codigoInvHeader];
+    const conteo = conteosPorCodigo[String(codigo || "").trim().toLowerCase()];
+    // Se recalcula la diferencia contra el stock ACTUAL (no el que había
+    // cuando se guardó el conteo) — si en el medio hubo otro movimiento del
+    // mismo ítem, esto evita que el ajuste quede mal calculado.
+    const cantidadSistemaActual = stockInvHeader ? redondear2(Number(it[stockInvHeader]) || 0) : 0;
+    const cantidadContada = redondear2(Number(conteo["Cantidad contada"]) || 0);
+    const diferencia = redondear2(cantidadContada - cantidadSistemaActual);
+
+    if (diferencia !== 0 && !(conteo["Observación"] || "").toString().trim()) {
+      throw new Error('El ítem "' + codigo + '" tiene diferencia y no quedó comentario — agrégalo antes de finalizar.');
+    }
+
+    if (diferencia !== 0) {
+      ajustarStock(mod.inventario, codigo, diferencia);
+      itemsConDiferencia++;
+      ajusteNeto = redondear2(ajusteNeto + diferencia);
+    }
+
+    maxNumCorte++;
+    const idCorte = mod.prefijo + "-COR-" + String(maxNumCorte).padStart(4, "0");
+    agregarFila(mod.cortes, hojaCortes, {
+      ID: idCorte,
+      Fecha: fechaHoy(),
+      Hora: horaAhora(),
+      "Código": codigo,
+      Referencia: refInvHeader ? it[refInvHeader] : "",
+      "Cantidad sistema": cantidadSistemaActual,
+      "Cantidad contada": cantidadContada,
+      "Diferencia": diferencia,
+      "Registró": p.registro || conteo["Contado por"] || "",
+      Empresa: it["Empresa"] || "",
+      "Observación": conteo["Observación"] || "",
+      Lote: p.loteId,
+    });
+
+    if (diferencia !== 0) {
+      detalle.push({
+        codigo: codigo,
+        referencia: refInvHeader ? it[refInvHeader] : "",
+        cantidadSistema: cantidadSistemaActual,
+        cantidadContada: cantidadContada,
+        diferencia: diferencia,
+        observacion: conteo["Observación"] || "",
+      });
+    }
+  });
+
+  actualizarCeldas(mod.cortesGenerales, hojaLotes.headers, lote._row, {
+    Estado: "Finalizado",
+    "Fecha fin": fechaHoy(),
+    "Hora fin": horaAhora(),
+    "Ítems totales": hojaInv.rows.length,
+    "Ítems contados": hojaInv.rows.length,
+    "Ítems con diferencia": itemsConDiferencia,
+    "Ajuste neto": ajusteNeto,
+  });
+
+  return {
+    loteId: p.loteId,
+    itemsTotales: hojaInv.rows.length,
+    itemsConDiferencia: itemsConDiferencia,
+    ajusteNeto: ajusteNeto,
+    unitLabel: mod.unitLabel,
+    detalle: detalle,
+  };
+}
+
+// Lista de cortes generales ya finalizados (para la pantalla de "Historial
+// de cortes"), más reciente primero.
+function accionGetHistorialCortesGenerales(p) {
+  const mod = MODULES[p.modulo];
+  if (!mod) throw new Error("Módulo inválido");
+  const hojaLotes = obtenerOCrearHoja(mod.cortesGenerales, HEADERS_CORTES_GENERALES);
+  const lotes = hojaLotes.rows
+    .filter((r) => r["Estado"] === "Finalizado")
+    .sort((a, b) => String(b["Fecha fin"] + " " + b["Hora fin"]).localeCompare(String(a["Fecha fin"] + " " + a["Hora fin"])));
+  return { unitLabel: mod.unitLabel, lotes: lotes };
+}
+
+// Reporte completo (mismo detalle que se ve justo al finalizar) para volver a
+// abrir un corte general ya hecho — se reconstruye desde "<Módulo>_Cortes"
+// filtrando por Lote, así no hay que guardar el detalle dos veces.
+function accionGetReporteCorteGeneral(p) {
+  const mod = MODULES[p.modulo];
+  if (!mod) throw new Error("Módulo inválido");
+  if (!p.loteId) throw new Error("Falta el lote del corte");
+
+  const hojaLotes = leerHoja(mod.cortesGenerales);
+  const lote = hojaLotes.rows.find((r) => r["ID"] === p.loteId);
+  if (!lote) throw new Error("Ese lote de corte no existe");
+
+  const hojaCortes = obtenerOCrearHoja(mod.cortes, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad sistema", "Cantidad contada", "Diferencia", "Registró", "Empresa", "Observación", "Lote"]);
+  const filas = hojaCortes.rows.filter((r) => r["Lote"] === p.loteId);
+
+  return {
+    lote: lote,
+    unitLabel: mod.unitLabel,
+    itemsTotales: Number(lote["Ítems totales"]) || filas.length,
+    itemsConDiferencia: Number(lote["Ítems con diferencia"]) || 0,
+    ajusteNeto: Number(lote["Ajuste neto"]) || 0,
+    detalle: filas.filter((r) => (Number(r["Diferencia"]) || 0) !== 0).map((r) => ({
+      codigo: r["Código"],
+      referencia: r["Referencia"],
+      cantidadSistema: r["Cantidad sistema"],
+      cantidadContada: r["Cantidad contada"],
+      diferencia: r["Diferencia"],
+      observacion: r["Observación"],
+    })),
+  };
 }
 
 // Historial de ingresos de un módulo (para poder consultarlo, no solo

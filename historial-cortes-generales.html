@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Historial de cortes · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="inventario.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Historial de cortes</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <div class="error-msg" id="errorMsg"></div>
+    <a class="btn btn-primary" id="btnNuevo" href="#" style="text-decoration:none;text-align:center;margin-bottom:16px;">Hacer un corte nuevo</a>
+    <div id="lista"></div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { usuario, mod, empresaActual } = ctx;
+    document.getElementById("backLink").href = "inventario.html?modulo=" + mod.key;
+    document.getElementById("sub").textContent = mod.label + " · " + empresaActual;
+    document.getElementById("btnNuevo").href = "corte-general.html?modulo=" + mod.key;
+
+    async function cargar() {
+      try {
+        const datos = await apiGet("getHistorialCortesGenerales", { modulo: mod.key });
+        const unit = datos.unitLabel;
+        const lotes = datos.lotes || [];
+        document.getElementById("lista").innerHTML = lotes.length === 0
+          ? '<p style="font-size:13px;color:var(--gris);margin-top:10px;">Todavía no se ha finalizado ningún corte general de inventario.</p>'
+          : lotes.map((l) => `
+              <a class="req-item" href="reporte-corte-general.html?modulo=${mod.key}&loteId=${encodeURIComponent(l["ID"])}">
+                <div class="fila">
+                  <span class="reqid" style="font-size:14px;">${l["ID"]}</span>
+                  <span class="badge badge-${Number(l["Ítems con diferencia"]) > 0 ? "Ajustado" : "Óptimo"}">${Number(l["Ajuste neto"]) > 0 ? "+" : ""}${l["Ajuste neto"] || 0} ${unit}</span>
+                </div>
+                <p class="op">${l["Ítems totales"]} ítems · ${l["Ítems con diferencia"]} con diferencia</p>
+                <p class="op">Finalizado ${l["Fecha fin"]} ${l["Hora fin"] || ""} · inició ${l["Iniciado por"] || "-"}</p>
+              </a>`).join("");
+      } catch (err) {
+        document.getElementById("errorMsg").textContent = err.message;
+        document.getElementById("errorMsg").style.display = "block";
+      }
+    }
+    cargar();
+  }
+</script>
+</body>
+</html>

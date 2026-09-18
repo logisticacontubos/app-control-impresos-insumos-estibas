@@ -307,6 +307,32 @@ textarea{resize:vertical;}
 .gauge-fill{height:100%;border-radius:4px;background:var(--magenta);}
 .umbral-input{width:64px;padding:6px 8px;margin:0;font-size:13px;border-radius:8px;border:1px solid var(--borde);}
 
+/* ===== Corte general de inventario (conteo masivo mensual) ===== */
+.item-corte{border-left:4px solid var(--borde);}
+.item-corte.contado{border-left-color:var(--verde);}
+.item-corte.diferencia{border-left-color:var(--ambar);}
+.campos-corte{display:flex;gap:10px;align-items:flex-end;}
+.campos-corte .campo{flex:1;}
+.campos-corte .campo label{font-size:10px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;}
+.campos-corte input{margin-bottom:0;}
+.solo-lectura{
+  padding:12px 14px;border:1.5px solid var(--borde);border-radius:12px;
+  font-size:15px;background:var(--fondo);color:var(--gris);
+}
+.dif-linea{font-size:12px;font-weight:700;margin:8px 0 0;}
+.dif-linea.pos{color:var(--verde);}
+.dif-linea.neg{color:var(--rojo);}
+.obs-label{font-size:11px;color:var(--ambar);font-weight:700;margin:8px 0 4px;}
+.progreso-corte{background:var(--fondo);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;}
+.progreso-corte .fila-top{display:flex;justify-content:space-between;font-size:12px;color:var(--gris);margin-bottom:6px;}
+.progreso-corte .fila-top b{color:var(--texto);}
+.resumen-cg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px;}
+.resumen-cg .stat{border:1px solid var(--borde);border-radius:10px;padding:10px;text-align:center;}
+.resumen-cg .stat .l{font-size:9px;color:var(--gris);text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px;}
+.resumen-cg .stat .v{font-size:15px;font-weight:800;margin:0;}
+.resumen-cg .stat.dif .v{color:var(--ambar);}
+.resumen-cg .stat.neto .v{color:var(--magenta);}
+
 /* ===== Selección de requisiciones en Reporte y KPI's ===== */
 .req-check{
   display:flex;
