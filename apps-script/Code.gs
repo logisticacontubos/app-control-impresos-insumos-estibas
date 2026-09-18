@@ -13,6 +13,7 @@ const MODULES = {
     requisiciones: "Impresos_Requisiciones",
     devoluciones: "Impresos_Devoluciones",
     ingresos: "Impresos_Ingresos",
+    cortes: "Impresos_Cortes",
     empresas: ["Contubos"],
     hasDevolucion: true,
     unitLabel: "kg",
@@ -23,6 +24,7 @@ const MODULES = {
     requisiciones: "Insumos_Requisiciones",
     devoluciones: null,
     ingresos: "Insumos_Ingresos",
+    cortes: "Insumos_Cortes",
     empresas: ["Contubos", "Tecnipapel"],
     hasDevolucion: false,
     unitLabel: "un.",
@@ -33,6 +35,7 @@ const MODULES = {
     requisiciones: "Estibas_Requisiciones",
     devoluciones: null,
     ingresos: "Estibas_Ingresos",
+    cortes: "Estibas_Cortes",
     empresas: ["Contubos", "Tecnipapel"],
     hasDevolucion: false,
     unitLabel: "un.",
@@ -75,6 +78,7 @@ function manejar(p) {
       case "getIngresos": data = accionGetIngresos(p); break;
       case "getHistorial": data = accionGetHistorial(p); break;
       case "getHistorialItem": data = accionGetHistorialItem(p); break;
+      case "registrarCorte": data = accionRegistrarCorte(p); break;
       default: throw new Error("Acción desconocida: " + p.accion);
     }
     return responder(true, data, null);
@@ -400,6 +404,68 @@ function accionIngresarStock(p) {
   return { ok: true, id: id, stockOk: stockOk };
 }
 
+// Corte de inventario — SIEMPRE manual (lo registra una persona después de
+// contar físicamente, no se calcula solo). Compara el conteo físico contra el
+// stock que tiene el sistema en ese momento: si hay diferencia, el
+// comentario es obligatorio (se valida aquí también, no solo en la
+// pantalla) y el stock del inventario se ajusta para que quede igual al
+// conteo físico. Queda guardado en "<Módulo>_Cortes" como un movimiento más,
+// con quién lo hizo, cuándo, cuánto había en sistema, cuánto se contó, la
+// diferencia y el comentario — y accionGetHistorialItem lo usa además como
+// el punto de partida ("inventario inicial") de la trazabilidad de ese ítem.
+function accionRegistrarCorte(p) {
+  const mod = MODULES[p.modulo];
+  if (!mod) throw new Error("Módulo inválido");
+  if (!p.codigo || p.cantidadContada === undefined || p.cantidadContada === "") throw new Error("Falta el ítem o la cantidad contada");
+  if (Number(p.cantidadContada) < 0) throw new Error("La cantidad contada no puede ser negativa");
+  if (!p.registro) throw new Error("Falta quién registra el corte");
+
+  const hojaInv = leerHoja(mod.inventario);
+  const codigoInvHeader = buscarEncabezado(hojaInv.headers, "Código");
+  const refInvHeader = buscarEncabezado(hojaInv.headers, "Referencia");
+  const stockInvHeader = buscarEncabezado(hojaInv.headers, "Stock actual");
+  const codigoBuscado = String(p.codigo || "").trim().toLowerCase();
+  const itemInv = hojaInv.rows.find((r) => String(r[codigoInvHeader] || "").trim().toLowerCase() === codigoBuscado);
+  if (!itemInv) throw new Error('El código "' + p.codigo + '" no existe en el inventario de este módulo.');
+
+  const cantidadSistema = stockInvHeader ? redondear2(Number(itemInv[stockInvHeader]) || 0) : 0;
+  const cantidadContada = redondear2(Number(p.cantidadContada));
+  const diferencia = redondear2(cantidadContada - cantidadSistema);
+
+  if (diferencia !== 0 && !(p.observacion || "").toString().trim()) {
+    throw new Error("Hay diferencia con el sistema (" + diferencia + " " + mod.unitLabel + ") — el comentario es obligatorio para poder ajustar.");
+  }
+
+  // Ajusta el stock del inventario para que quede igual al conteo físico
+  // (delta = lo que falta o sobra respecto al sistema).
+  const stockOk = ajustarStock(mod.inventario, itemInv[codigoInvHeader], diferencia);
+
+  const hojaCortes = obtenerOCrearHoja(mod.cortes, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad sistema", "Cantidad contada", "Diferencia", "Registró", "Empresa", "Observación"]);
+  let maxNum = 0;
+  hojaCortes.rows.forEach((r) => {
+    const m = String(r["ID"] || "").match(new RegExp("^" + mod.prefijo + "-COR-(\\d+)$"));
+    if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+  });
+  const id = mod.prefijo + "-COR-" + String(maxNum + 1).padStart(4, "0");
+
+  const fila = {
+    ID: id,
+    Fecha: fechaHoy(),
+    Hora: horaAhora(),
+    "Código": itemInv[codigoInvHeader],
+    Referencia: refInvHeader ? itemInv[refInvHeader] : "",
+    "Cantidad sistema": cantidadSistema,
+    "Cantidad contada": cantidadContada,
+    "Diferencia": diferencia,
+    "Registró": p.registro,
+    Empresa: p.empresa || "",
+    "Observación": p.observacion || "",
+  };
+  agregarFila(mod.cortes, hojaCortes, fila);
+
+  return { ok: true, id: id, diferencia: diferencia, stockOk: stockOk };
+}
+
 // Historial de ingresos de un módulo (para poder consultarlo, no solo
 // registrarlo), más reciente primero.
 function accionGetIngresos(p) {
@@ -491,6 +557,46 @@ function accionGetHistorialItem(p) {
       }
     });
 
+  // Cortes de inventario (conteo físico manual) — cada uno es un punto de
+  // control: además de quedar en la lista de movimientos, reinicia el saldo
+  // corrido (ver más abajo) a la cantidad que se contó ese día, así que todo
+  // lo anterior a un corte no afecta el saldo mostrado después de él.
+  const hojaCor = obtenerOCrearHoja(mod.cortes, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad sistema", "Cantidad contada", "Diferencia", "Registró", "Empresa", "Observación"]);
+  hojaCor.rows
+    .filter((r) => String(r["Código"] || "").trim().toLowerCase() === codigoBuscado)
+    .forEach((r) => {
+      movimientos.push({
+        tipo: "corte",
+        id: r["ID"],
+        cantidad: Number(r["Cantidad contada"]) || 0,
+        cantidadSistema: Number(r["Cantidad sistema"]) || 0,
+        diferencia: Number(r["Diferencia"]) || 0,
+        quien: r["Registró"] || "",
+        fecha: r["Fecha"] || "",
+        hora: r["Hora"] || "",
+        empresa: r["Empresa"] || "",
+        detalle: r["Observación"] || "",
+      });
+    });
+
+  // Saldo corrido: se calcula en orden CRONOLÓGICO (más viejo primero). Un
+  // corte reinicia el saldo a la cantidad contada ese día (es la definición
+  // misma de "corte": a partir de ahí el saldo es ese). Los demás movimientos
+  // suman o restan sobre el saldo anterior. Si no hay ningún corte previo,
+  // el saldo antes del primer movimiento se asume 0.
+  const cronologico = movimientos.slice().sort((a, b) => String(a.fecha + " " + a.hora).localeCompare(String(b.fecha + " " + b.hora)));
+  let saldoCorrido = 0;
+  cronologico.forEach((m) => {
+    if (m.tipo === "corte") {
+      saldoCorrido = m.cantidad;
+    } else if (m.tipo === "ingreso" || m.tipo === "devolucion") {
+      saldoCorrido = redondear2(saldoCorrido + m.cantidad);
+    } else if (m.tipo === "salida") {
+      saldoCorrido = redondear2(saldoCorrido - m.cantidad);
+    }
+    m.saldo = saldoCorrido;
+  });
+
   movimientos.sort((a, b) => String(b.fecha + " " + b.hora).localeCompare(String(a.fecha + " " + a.hora)));
 
   // Datos del ítem (referencia, stock actual) para el encabezado de la pantalla.
@@ -500,12 +606,18 @@ function accionGetHistorialItem(p) {
   const stockInvHeader = buscarEncabezado(hojaInv.headers, "Stock actual");
   const itemInv = hojaInv.rows.find((r) => String(r[codigoInvHeader] || "").trim().toLowerCase() === codigoBuscado);
 
+  // Último corte registrado (el más reciente por fecha+hora) — para mostrar
+  // un resumen en la parte de arriba de la pantalla ("Último corte: ...").
+  const cortesOrdenados = movimientos.filter((m) => m.tipo === "corte");
+  const ultimoCorte = cortesOrdenados.length > 0 ? cortesOrdenados[0] : null;
+
   return {
     codigo: p.codigo,
     referencia: itemInv ? itemInv[refInvHeader] : "",
     stockActual: itemInv && stockInvHeader ? itemInv[stockInvHeader] : "",
     unitLabel: mod.unitLabel,
     movimientos: movimientos,
+    ultimoCorte: ultimoCorte,
   };
 }
 

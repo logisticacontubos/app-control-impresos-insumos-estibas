@@ -76,6 +76,10 @@ function puedeEditarUmbrales(rol) { return rol === "compras" || rol === "admin";
 // Ingresar mercancía nueva al inventario: Jefe de Logística (rol "bodega") y
 // Supervisor de Inventarios (rol "admin").
 function puedeIngresarStock(rol) { return rol === "bodega" || rol === "admin"; }
+// Registrar corte de inventario (conteo físico manual): mismos roles que
+// pueden ingresar stock, porque es la misma responsabilidad de bodega —
+// mantener el inventario físico al día en el sistema.
+function puedeRegistrarCorte(rol) { return puedeIngresarStock(rol); }
 function puedeVerReportes(rol) { return rol === "compras" || rol === "bodega" || rol === "admin"; }
 function vistasParaRol(rol) {
   const VISTAS = {
@@ -105,6 +109,8 @@ const MENSAJES_CARGA = {
   getReporte: "Generando reporte...",
   ingresarStock: "Registrando ingreso...",
   getIngresos: "Cargando ingresos...",
+  getHistorialItem: "Cargando historial...",
+  registrarCorte: "Registrando corte...",
 };
 let _cargasActivas = 0;
 function mostrarCargando(mensaje) {

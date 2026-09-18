@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corte de inventario · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="inventario.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Corte de inventario</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <div class="info-msg" id="toastExito" style="display:none;"></div>
+    <div class="error-msg" id="errorMsg"></div>
+
+    <div class="card">
+      <label for="selItem">Ítem</label>
+      <select id="selItem"></select>
+
+      <p class="op" style="margin-top:10px;">Cantidad en sistema: <strong id="txtSistema">-</strong></p>
+
+      <label for="inpCantidad">Cantidad contada (conteo físico)</label>
+      <input type="number" id="inpCantidad" step="0.01" min="0" placeholder="0">
+
+      <p class="op" id="txtDiferencia" style="margin-top:4px;"></p>
+
+      <label for="inpObservacion" id="lblObservacion">Observación</label>
+      <textarea id="inpObservacion" rows="3" placeholder="Ej: Se contó físicamente en bodega, faltante por..."></textarea>
+
+      <button class="btn btn-primary" id="btnRegistrar" style="margin-top:6px;">Registrar corte</button>
+    </div>
+
+    <p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Historial de cortes de este ítem</p>
+    <div id="listaCortes"></div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { usuario, mod } = ctx;
+    const params = new URLSearchParams(window.location.search);
+    const codigoUrl = params.get("codigo") || "";
+    document.getElementById("backLink").href = codigoUrl
+      ? "historial-item.html?modulo=" + mod.key + "&codigo=" + encodeURIComponent(codigoUrl)
+      : "inventario.html?modulo=" + mod.key;
+    document.getElementById("titulo").textContent = "Corte de inventario";
+    document.getElementById("sub").textContent = mod.label;
+
+    if (!puedeRegistrarCorte(usuario.rol)) {
+      document.querySelector("main").innerHTML = '<p style="font-size:13px;color:var(--gris);margin-top:20px;">No tienes permiso para registrar cortes de inventario en este módulo.</p>';
+    } else {
+      let itemsInv = [];
+      let headersInv = {};
+
+      function itemSeleccionado() {
+        const codigo = document.getElementById("selItem").value;
+        return itemsInv.find((it) => it[headersInv.codigoHeader] === codigo);
+      }
+
+      function actualizarSistemaYDiferencia() {
+        const it = itemSeleccionado();
+        const sistema = it ? (Number(it[headersInv.stockHeader]) || 0) : 0;
+        document.getElementById("txtSistema").textContent = it ? (sistema + " " + mod.unitLabel) : "-";
+
+        const cantidad = document.getElementById("inpCantidad").value;
+        const txtDif = document.getElementById("txtDiferencia");
+        const lblObs = document.getElementById("lblObservacion");
+        if (cantidad === "" || !it) {
+          txtDif.textContent = "";
+          lblObs.textContent = "Observación";
+          return;
+        }
+        const diferencia = Math.round((Number(cantidad) - sistema) * 100) / 100;
+        if (diferencia === 0) {
+          txtDif.textContent = "Sin diferencia con el sistema.";
+          txtDif.style.color = "var(--verde)";
+          lblObs.textContent = "Observación (opcional)";
+        } else {
+          const signo = diferencia > 0 ? "+" : "";
+          txtDif.textContent = "Diferencia: " + signo + diferencia + " " + mod.unitLabel + (diferencia > 0 ? " (sobrante)" : " (faltante)");
+          txtDif.style.color = "var(--rojo)";
+          lblObs.textContent = "Observación (obligatoria — hay diferencia)";
+        }
+      }
+
+      async function cargarItems() {
+        const invData = await apiGet("getInventario", { modulo: mod.key, empresa: "" });
+        itemsInv = invData.items || [];
+        const codigoHeader = buscarEncabezado(itemsInv[0], "Código");
+        const refHeader = buscarEncabezado(itemsInv[0], "Referencia");
+        const stockHeader = buscarEncabezado(itemsInv[0], "Stock actual");
+        headersInv = { codigoHeader, refHeader, stockHeader };
+        const sel = document.getElementById("selItem");
+        sel.innerHTML = itemsInv.map((it) =>
+          `<option value="${it[codigoHeader]}">${it[refHeader]} (${it[codigoHeader]})</option>`
+        ).join("");
+        if (codigoUrl) {
+          const existe = itemsInv.some((it) => String(it[codigoHeader] || "").trim().toLowerCase() === codigoUrl.trim().toLowerCase());
+          if (existe) sel.value = codigoUrl;
+        }
+        actualizarSistemaYDiferencia();
+      }
+
+      async function cargarCortes() {
+        const codigo = document.getElementById("selItem").value;
+        if (!codigo) return;
+        const data = await apiGet("getHistorialItem", { modulo: mod.key, codigo: codigo }, { silencioso: true });
+        const cortes = (data.movimientos || []).filter((m) => m.tipo === "corte");
+        document.getElementById("listaCortes").innerHTML = cortes.length === 0
+          ? '<p style="font-size:13px;color:var(--gris);">Todavía no se han registrado cortes para este ítem.</p>'
+          : cortes.map((c) => `
+              <div class="req-item">
+                <div class="fila">
+                  <span class="reqid">${c.id || ""}</span>
+                  <span class="badge badge-${c.diferencia === 0 ? "Óptimo" : "Crítico"}">${c.diferencia > 0 ? "+" : ""}${c.diferencia} ${mod.unitLabel}</span>
+                </div>
+                <p class="op" style="font-weight:600;">Contado: ${c.cantidad} ${mod.unitLabel} (sistema tenía ${c.cantidadSistema})</p>
+                <p class="op">Registró ${c.quien} · ${c.fecha} ${c.hora || ""}${c.empresa ? " · " + c.empresa : ""}</p>
+                ${c.detalle ? `<p class="op">${c.detalle}</p>` : ""}
+              </div>`).join("");
+      }
+
+      document.getElementById("selItem").addEventListener("change", () => {
+        actualizarSistemaYDiferencia();
+        cargarCortes();
+      });
+      document.getElementById("inpCantidad").addEventListener("input", actualizarSistemaYDiferencia);
+
+      document.getElementById("btnRegistrar").addEventListener("click", async () => {
+        const errorEl = document.getElementById("errorMsg");
+        errorEl.style.display = "none";
+        const codigo = document.getElementById("selItem").value;
+        const cantidad = document.getElementById("inpCantidad").value;
+        const observacion = document.getElementById("inpObservacion").value;
+        const it = itemSeleccionado();
+        const sistema = it ? (Number(it[headersInv.stockHeader]) || 0) : 0;
+        if (!codigo || cantidad === "" || Number(cantidad) < 0) {
+          errorEl.textContent = "Selecciona un ítem e ingresa la cantidad contada.";
+          errorEl.style.display = "block";
+          return;
+        }
+        const diferencia = Math.round((Number(cantidad) - sistema) * 100) / 100;
+        if (diferencia !== 0 && !observacion.trim()) {
+          errorEl.textContent = "Hay diferencia con el sistema (" + diferencia + " " + mod.unitLabel + ") — la observación es obligatoria para poder ajustar.";
+          errorEl.style.display = "block";
+          return;
+        }
+        try {
+          const res = await apiPost("registrarCorte", {
+            modulo: mod.key,
+            codigo: codigo,
+            cantidadContada: cantidad,
+            registro: usuario.nombre,
+            observacion: observacion,
+          });
+          document.getElementById("inpCantidad").value = "";
+          document.getElementById("inpObservacion").value = "";
+          mostrarToast(`Corte registrado (${res.id})`);
+          if (res.stockOk === false) alert("El corte quedó registrado, pero no se pudo actualizar el stock del ítem — revisa que el código exista bien en el inventario.");
+          await cargarItems();
+          cargarCortes();
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.style.display = "block";
+        }
+      });
+
+      cargarItems().then(cargarCortes);
+    }
+  }
+</script>
+</body>
+</html>

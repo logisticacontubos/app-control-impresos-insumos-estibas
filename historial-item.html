@@ -40,6 +40,7 @@
     </div>
 
     <div class="btn-row no-imprimir" style="margin-bottom:12px;">
+      <a class="btn btn-primary" id="btnCorte" href="#" style="text-decoration:none;text-align:center;">Registrar corte</a>
       <button class="btn btn-secondary" id="btnExcel">Descargar Excel</button>
       <button class="btn btn-secondary" id="btnPdf">Descargar PDF</button>
     </div>
@@ -57,6 +58,7 @@
             <th style="padding:6px 8px;border:1px solid var(--borde);">Fecha</th>
             <th style="padding:6px 8px;border:1px solid var(--borde);">Hora</th>
             <th style="padding:6px 8px;border:1px solid var(--borde);">Empresa</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Saldo</th>
           </tr>
         </thead>
         <tbody id="tbodyImpresion"></tbody>
@@ -125,6 +127,7 @@
       ingreso: { texto: "Ingreso de stock", signo: "+", color: "var(--verde)" },
       salida: { texto: "Entrega", signo: "-", color: "var(--magenta)" },
       devolucion: { texto: "Devolución", signo: "+", color: "var(--verde)" },
+      corte: { texto: "Corte de inventario", signo: "", color: "var(--gris)" },
     };
 
     function render() {
@@ -139,29 +142,39 @@
               ? "Ingresó " + (m.quien || "-")
               : m.tipo === "salida"
                 ? "Entregó " + (m.quien || "-") + " a " + (m.aQuien || "-")
-                : "Devolvió " + (m.quien || "-") + (m.aQuien ? " · recibió " + m.aQuien : "");
+                : m.tipo === "devolucion"
+                  ? "Devolvió " + (m.quien || "-") + (m.aQuien ? " · recibió " + m.aQuien : "")
+                  : "Registró " + (m.quien || "-");
+            const cantidadTxt = m.tipo === "corte"
+              ? "Contado: " + m.cantidad + " " + mod.unitLabel + (m.diferencia ? " (dif. " + (m.diferencia > 0 ? "+" : "") + m.diferencia + ")" : "")
+              : et.signo + m.cantidad + " " + mod.unitLabel;
             return `
               <div class="req-item">
                 <div class="fila">
                   <span class="reqid" style="font-size:14px;">${m.id || ""}</span>
-                  <span style="font-weight:700;color:${et.color};">${et.texto} · ${et.signo}${m.cantidad} ${mod.unitLabel}</span>
+                  <span style="font-weight:700;color:${et.color};">${et.texto} · ${cantidadTxt}</span>
                 </div>
                 <p class="op">${quienTxt}</p>
                 <p class="op">${m.fecha}${m.hora ? " " + m.hora : ""}${m.empresa ? " · " + m.empresa : ""}</p>
                 ${m.detalle ? `<p class="op">${m.detalle}</p>` : ""}
+                <p class="op" style="font-weight:600;">Saldo: ${m.saldo !== undefined ? m.saldo : "-"} ${mod.unitLabel}</p>
               </div>`;
           }).join("");
 
       const celda = (v) => `<td style="padding:6px 8px;border:1px solid var(--borde);">${v}</td>`;
       document.getElementById("tbodyImpresion").innerHTML = itemsFiltrados.length === 0
-        ? `<tr><td colspan="8" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">No hay movimientos en este rango.</td></tr>`
+        ? `<tr><td colspan="9" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">No hay movimientos en este rango.</td></tr>`
         : itemsFiltrados.map((m) => {
             const et = ETIQUETAS[m.tipo];
-            const quienTxt = m.tipo === "ingreso" ? (m.quien || "-") : (m.quien || "-");
+            const quienTxt = m.quien || "-";
             const aQuienTxt = m.tipo === "salida" ? (m.aQuien || "-") : m.tipo === "devolucion" ? (m.aQuien || "-") : "-";
+            const cantidadTxt = m.tipo === "corte"
+              ? "Contado " + m.cantidad + (m.diferencia ? " (dif. " + (m.diferencia > 0 ? "+" : "") + m.diferencia + ")" : "")
+              : et.signo + m.cantidad + " " + mod.unitLabel;
             return "<tr>" +
-              celda(et.texto) + celda(m.id || "") + celda(et.signo + m.cantidad + " " + mod.unitLabel) +
+              celda(et.texto) + celda(m.id || "") + celda(cantidadTxt) +
               celda(quienTxt) + celda(aQuienTxt) + celda(m.fecha || "") + celda(m.hora || "") + celda(m.empresa || "") +
+              celda(m.saldo !== undefined ? m.saldo : "") +
               "</tr>";
           }).join("");
     }
@@ -170,10 +183,13 @@
       const datos = await apiGet("getHistorialItem", { modulo: mod.key, codigo: codigo });
       datosItem = datos;
       movimientos = datos.movimientos || [];
+      document.getElementById("btnCorte").href = "corte-inventario.html?modulo=" + mod.key + "&codigo=" + encodeURIComponent(codigo);
+      const uc = datos.ultimoCorte;
       document.getElementById("cardItem").innerHTML = `
         <div class="fila"><span class="reqid" style="font-size:15px;">${datos.referencia || codigo}</span></div>
         <p class="op">Código: ${datos.codigo}</p>
         ${datos.stockActual !== "" ? `<p class="op" style="font-weight:600;">Stock actual: ${datos.stockActual} ${datos.unitLabel}</p>` : ""}
+        ${uc ? `<p class="op">Último corte: ${uc.cantidad} ${datos.unitLabel} el ${uc.fecha}${uc.hora ? " " + uc.hora : ""} (registró ${uc.quien || "-"})</p>` : `<p class="op" style="color:var(--gris);">Todavía no se ha registrado ningún corte de inventario.</p>`}
       `;
       document.getElementById("tituloPdf").textContent = "Historial · " + (datos.referencia || codigo);
       document.getElementById("subPdf").textContent =
@@ -206,11 +222,12 @@
         ["Historial del ítem", datosItem.referencia || codigo, mod.label, empresaActual],
         ["Código", datosItem.codigo, "Stock actual", datosItem.stockActual !== "" ? datosItem.stockActual + " " + datosItem.unitLabel : ""],
         [],
-        ["Movimiento", "ID", "Cantidad", "Quién", "A quién", "Fecha", "Hora", "Empresa"],
+        ["Movimiento", "ID", "Cantidad", "Quién", "A quién", "Fecha", "Hora", "Empresa", "Saldo"],
         ...itemsFiltrados.map((m) => {
           const et = ETIQUETAS[m.tipo];
           const aQuienTxt = m.tipo === "salida" || m.tipo === "devolucion" ? (m.aQuien || "") : "";
-          return [et.texto, m.id || "", et.signo + m.cantidad, m.quien || "", aQuienTxt, m.fecha || "", m.hora || "", m.empresa || ""];
+          const cantidadTxt = m.tipo === "corte" ? m.cantidad : et.signo + m.cantidad;
+          return [et.texto, m.id || "", cantidadTxt, m.quien || "", aQuienTxt, m.fecha || "", m.hora || "", m.empresa || "", m.saldo !== undefined ? m.saldo : ""];
         }),
       ];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filas), "Historial");
