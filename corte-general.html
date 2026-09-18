@@ -75,27 +75,41 @@
 
         document.getElementById("listaItems").innerHTML = visibles.length === 0
           ? '<p style="font-size:13px;color:var(--gris);margin-top:10px;">No hay ítems en este filtro.</p>'
-          : visibles.map((it, idx) => {
+          : visibles.map((it) => {
               const est = estadoItem(it);
               const idxReal = estado.items.indexOf(it);
-              const dif = it.cantidadContada === "" ? null : redondear2(Number(it.cantidadContada) - Number(it.cantidadSistema));
+              // El comentario, la línea de diferencia y el botón "Guardar" SIEMPRE
+              // se muestran (no solo cuando ya hay una diferencia guardada) — antes
+              // estaban condicionados a "dif !== null", que solo era cierto DESPUÉS
+              // de guardar, así que mientras la persona escribía no pasaba nada. El
+              // recálculo en vivo mientras se escribe lo hace actualizarTarjeta().
               return `
-                <div class="req-item item-corte ${est === "contado" ? "contado" : ""} ${est === "diferencia" ? "diferencia" : ""}" style="margin-bottom:10px;">
+                <div class="req-item item-corte ${est === "contado" ? "contado" : ""} ${est === "diferencia" ? "diferencia" : ""}" id="card-${idxReal}" style="margin-bottom:10px;">
                   <div class="fila">
                     <span class="reqid" style="font-size:14px;">${it.referencia || it.codigo}</span>
-                    <span class="badge badge-${est === "pendiente" ? "Pendiente" : est === "diferencia" ? "Ajustado" : "Óptimo"}">${est === "pendiente" ? "Pendiente" : est === "diferencia" ? "Diferencia" : "Sin diferencia"}</span>
+                    <span class="badge badge-${est === "pendiente" ? "Pendiente" : est === "diferencia" ? "Ajustado" : "Óptimo"}" id="badge-${idxReal}">${est === "pendiente" ? "Pendiente" : est === "diferencia" ? "Diferencia" : "Sin diferencia"}</span>
                   </div>
                   <p class="op" style="margin-bottom:8px;">${it.codigo}${it.empresa ? " · " + it.empresa : ""}</p>
                   <div class="campos-corte">
                     <div class="campo"><label>Sistema</label><div class="solo-lectura">${it.cantidadSistema} ${estado.unitLabel}</div></div>
-                    <div class="campo"><label>Contado</label><input type="number" step="0.01" min="0" placeholder="0" value="${it.cantidadContada}" data-idx="${idxReal}" class="inpContado"></div>
+                    <div class="campo"><label>Contado</label><input type="number" step="0.01" min="0" placeholder="0" value="${it.cantidadContada}" id="inpContado-${idxReal}" class="inpContado" data-idx="${idxReal}"></div>
                   </div>
-                  ${dif !== null ? `<p class="dif-linea ${dif === 0 ? "pos" : "neg"}">${dif === 0 ? "Coincide con el sistema." : "Diferencia: " + (dif > 0 ? "+" : "") + dif + " " + estado.unitLabel + (dif > 0 ? " (sobrante)" : " (faltante)")}</p>` : ""}
-                  ${dif !== 0 && dif !== null ? `<p class="obs-label">Comentario obligatorio — hay diferencia</p><textarea rows="2" class="inpObservacion" data-idx="${idxReal}" placeholder="Ej: rollo húmedo descartado...">${it.observacion || ""}</textarea><button class="btn btn-secondary btnGuardarConteo" data-idx="${idxReal}" style="margin-top:-6px;">Guardar este ítem</button>` : ""}
-                  ${dif === 0 ? `<button class="btn btn-secondary btnGuardarConteo" data-idx="${idxReal}" style="margin-top:6px;">Guardar este ítem</button>` : ""}
+                  <p class="dif-linea" id="difLinea-${idxReal}"></p>
+                  <label id="obsLabel-${idxReal}">Observación (opcional)</label>
+                  <textarea rows="2" id="inpObs-${idxReal}" placeholder="Ej: rollo húmedo descartado...">${it.observacion || ""}</textarea>
+                  <button class="btn btn-secondary btnGuardarConteo" data-idx="${idxReal}" style="margin-top:-2px;">Guardar este ítem</button>
                 </div>`;
             }).join("");
 
+        // Pinta el estado inicial de cada tarjeta (por si ya tenía un conteo
+        // guardado de antes) y deja el recálculo en vivo enganchado al "input".
+        visibles.forEach((it) => {
+          const idxReal = estado.items.indexOf(it);
+          actualizarTarjeta(idxReal);
+        });
+        document.querySelectorAll(".inpContado").forEach((inp) => {
+          inp.addEventListener("input", () => actualizarTarjeta(Number(inp.dataset.idx)));
+        });
         document.querySelectorAll(".btnGuardarConteo").forEach((btn) => {
           btn.addEventListener("click", () => guardarConteo(Number(btn.dataset.idx)));
         });
@@ -107,16 +121,65 @@
         }
       }
 
+      // Recalcula en vivo (sin volver a pedir nada al servidor) la diferencia,
+      // el estado visual de la tarjeta y si el comentario es obligatorio —
+      // se dispara en cada tecla que se escribe en "Contado".
+      function actualizarTarjeta(idx) {
+        const it = estado.items[idx];
+        const inputCant = document.getElementById("inpContado-" + idx);
+        const difEl = document.getElementById("difLinea-" + idx);
+        const obsLabel = document.getElementById("obsLabel-" + idx);
+        const cardEl = document.getElementById("card-" + idx);
+        const badgeEl = document.getElementById("badge-" + idx);
+        if (!inputCant) return;
+        const cantidad = inputCant.value;
+
+        if (cantidad === "") {
+          difEl.textContent = "";
+          obsLabel.textContent = "Observación (opcional)";
+          obsLabel.style.color = "";
+          cardEl.className = "req-item item-corte";
+          badgeEl.className = "badge badge-Pendiente";
+          badgeEl.textContent = "Pendiente";
+          return;
+        }
+
+        const dif = redondear2(Number(cantidad) - Number(it.cantidadSistema));
+        if (dif === 0) {
+          difEl.textContent = "Coincide con el sistema.";
+          difEl.className = "dif-linea pos";
+          obsLabel.textContent = "Observación (opcional)";
+          obsLabel.style.color = "";
+          cardEl.className = "req-item item-corte contado";
+          badgeEl.className = "badge badge-Óptimo";
+          badgeEl.textContent = "Sin diferencia";
+        } else {
+          difEl.textContent = "Diferencia: " + (dif > 0 ? "+" : "") + dif + " " + estado.unitLabel + (dif > 0 ? " (sobrante)" : " (faltante)");
+          difEl.className = "dif-linea neg";
+          obsLabel.textContent = "Observación (obligatoria — hay diferencia)";
+          obsLabel.style.color = "var(--ambar)";
+          cardEl.className = "req-item item-corte diferencia";
+          badgeEl.className = "badge badge-Ajustado";
+          badgeEl.textContent = "Diferencia";
+        }
+      }
+
       async function guardarConteo(idx) {
         const errorEl = document.getElementById("errorMsg");
         errorEl.style.display = "none";
         const it = estado.items[idx];
-        const inputCant = document.querySelector(`.inpContado[data-idx="${idx}"]`);
-        const inputObs = document.querySelector(`.inpObservacion[data-idx="${idx}"]`);
+        const inputCant = document.getElementById("inpContado-" + idx);
+        const inputObs = document.getElementById("inpObs-" + idx);
         const cantidad = inputCant ? inputCant.value : "";
         const observacion = inputObs ? inputObs.value : "";
         if (cantidad === "" || Number(cantidad) < 0) {
           errorEl.textContent = "Ingresa una cantidad contada válida para " + (it.referencia || it.codigo) + ".";
+          errorEl.style.display = "block";
+          return;
+        }
+        const dif = redondear2(Number(cantidad) - Number(it.cantidadSistema));
+        if (dif !== 0 && !observacion.trim()) {
+          errorEl.textContent = "Hay diferencia en \"" + (it.referencia || it.codigo) + "\" (" + (dif > 0 ? "+" : "") + dif + " " + estado.unitLabel + ") — el comentario es obligatorio para poder guardarlo.";
           errorEl.style.display = "block";
           return;
         }
