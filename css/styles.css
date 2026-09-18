@@ -357,3 +357,12 @@ textarea{resize:vertical;}
 .encabezado-pdf img{height:36px;width:auto;}
 .encabezado-pdf .txt h2{margin:0;font-size:18px;color:var(--magenta);}
 .encabezado-pdf .txt p{margin:2px 0 0;font-size:12px;color:var(--gris);}
+/* Pie de página propio del PDF/impresión — el pie con URL/usuario/fecha que
+   agrega Chrome de escritorio (casilla "Encabezados y pies de página") NO
+   existe en la mayoría de navegadores de celular, así que no se puede
+   depender de eso: se dibuja aquí mismo, dentro del contenido, para que
+   salga igual sin importar desde qué dispositivo se genere el PDF. */
+.pie-pdf{
+  margin-top:18px;padding-top:10px;border-top:1px solid var(--borde);
+  font-size:10px;color:var(--gris);
+}

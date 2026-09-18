@@ -314,6 +314,10 @@ function fechaHoy() {
   const dia = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dia}`;
 }
+function horaActual() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
 function mostrarError(elId, msg) {
   const el = document.getElementById(elId);
   if (!el) return;

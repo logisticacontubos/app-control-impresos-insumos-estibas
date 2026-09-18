@@ -116,6 +116,13 @@
       </div>
       <p style="font-size:12px;color:var(--gris);margin:-4px 0 10px;" class="no-imprimir">Marca las que quieras incluir en la tabla de trazabilidad del Excel/PDF. Cada una muestra quién pidió y cuándo, quién entregó y a quién, si faltó/sobró algo y si hubo devolución.</p>
       <div id="listaRequisiciones" class="no-imprimir"></div>
+
+      <!-- Pie propio del PDF: en computador, Chrome agrega su propio pie con
+           la URL/fecha (casilla "Encabezados y pies de página" del diálogo de
+           impresión), pero esa opción no existe en la mayoría de navegadores
+           de celular — así que esta información se dibuja aquí directamente
+           para que salga igual sin importar desde qué dispositivo se genere. -->
+      <div class="pie-pdf solo-impresion" id="piePdf"></div>
     </div>
   </main>
 </div>
@@ -193,6 +200,8 @@
 
       document.getElementById("subPdf").textContent =
         empresaActual + " · " + desde + " a " + hasta + " · generado " + fechaHoy();
+      document.getElementById("piePdf").textContent =
+        "Generado por " + usuario.nombre + " (" + usuario.rol + ") · " + fechaHoy() + " " + horaActual() + " · " + window.location.hostname;
 
       document.getElementById("statConsumo").textContent = data.totalConsumido + " " + data.unitLabel;
       document.getElementById("statEntregadas").textContent = data.requisicionesEntregadas;

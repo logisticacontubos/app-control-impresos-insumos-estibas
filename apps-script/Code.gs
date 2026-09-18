@@ -74,6 +74,7 @@ function manejar(p) {
       case "ingresarStock": data = accionIngresarStock(p); break;
       case "getIngresos": data = accionGetIngresos(p); break;
       case "getHistorial": data = accionGetHistorial(p); break;
+      case "getHistorialItem": data = accionGetHistorialItem(p); break;
       default: throw new Error("Acción desconocida: " + p.accion);
     }
     return responder(true, data, null);
@@ -211,7 +212,14 @@ function accionCrearRequisicion(p) {
     Estado: "Pendiente",
   };
   if (hoja.headers.indexOf("Empresa") !== -1) fila["Empresa"] = p.empresa || "";
-  if (cantSolHeader) fila[cantSolHeader] = p.cantidad;
+  // OJO: se guarda Number(p.cantidad), NUNCA el texto crudo que llega del
+  // formulario. Si se guarda como texto (ej. "16.4"), Google Sheets lo
+  // autoconvierte a veces a una FECHA (16 de abril) porque el texto también
+  // calza con un patrón de fecha día.mes — exactamente lo que pasó con
+  // IMP-0007 (quedó guardado "2026-04-16" en vez de 16.4) e IMP-0005 antes.
+  // Al mandar un número real de JavaScript (no texto), Sheets ya no tiene que
+  // "adivinar" el tipo de dato y lo guarda como número tal cual.
+  if (cantSolHeader) fila[cantSolHeader] = redondear2(Number(p.cantidad));
   if (motivoHeader) fila[motivoHeader] = p.motivo || "";
   // "Hora" es el nombre exacto de columna (no un prefijo) para no confundirla
   // con "Hora entrega", que es otra columna distinta.
@@ -240,18 +248,15 @@ function accionEntregarRequisicion(p) {
   Logger.log("entregarRequisicion: modulo=%s id=%s encontrada=%s cantidad=%s entregadoA=%s", p.modulo, idBuscado, !!fila, p.cantidadEntregada, p.entregadoA);
   if (!fila) throw new Error('Requisición "' + idBuscado + '" no encontrada en ' + mod.requisiciones);
 
-  // Las entregas se van acumulando (por si se entrega en varias veces). Si lo
-  // acumulado todavía no cubre lo solicitado, la requisición queda "Entregado
-  // parcial" y sigue visible en la cola de pendientes por el saldo que falta,
-  // en vez de cerrarse como si ya estuviera completa.
+  // Cualquier entrega (así sea menos o más de lo solicitado) cierra la
+  // requisición como "Entregado" de una vez — ya no se deja como "Entregado
+  // parcial" esperando el resto. Lo que se entregó queda registrado tal cual
+  // (para trazabilidad y para descontar del inventario), pero la requisición
+  // no se queda pendiente/abierta por la diferencia.
   const entregadaPrevia = cantEntHeader ? (Number(fila[cantEntHeader]) || 0) : 0;
   const nuevaEntregada = redondear2(entregadaPrevia + Number(p.cantidadEntregada));
   const solicitada = cantSolHeader ? redondear2(Number(fila[cantSolHeader]) || 0) : 0;
-  // Se compara redondeado a 2 decimales: si no, entregar exactamente lo
-  // solicitado en kg (ej. 57.5) puede quedar como "Entregado parcial" por
-  // errores de precisión de punto flotante (57.5 vs 57.499999999999996) y la
-  // requisición nunca se cierra ni desaparece de la cola de pendientes.
-  const estado = solicitada > 0 && nuevaEntregada < solicitada ? "Entregado parcial" : "Entregado";
+  const estado = "Entregado";
 
   const patch = { Estado: estado, "Entregó (bodega)": p.entrego, "Entregado a (producción)": p.entregadoA };
   if (cantEntHeader) patch[cantEntHeader] = nuevaEntregada;
@@ -292,12 +297,15 @@ function accionDevolverRequisicion(p) {
   if (!fila) throw new Error('Requisición "' + idBuscado + '" no encontrada en ' + mod.requisiciones);
 
   const prevDevuelta = Number(fila[cantDevHeader]) || 0;
-  const nuevaDevuelta = prevDevuelta + Number(p.cantidadDevuelta);
+  // redondear2() evita el clásico problema de punto flotante de JavaScript
+  // (ej. 6.3 - 5 = 1.2999999999999998 en vez de 1.3) que se veía en el
+  // "saldo neto" mostrado al usuario.
+  const nuevaDevuelta = redondear2(prevDevuelta + Number(p.cantidadDevuelta));
   const entregada = Number(fila[cantEntHeader]) || 0;
 
   const patch = {};
   if (cantDevHeader) patch[cantDevHeader] = nuevaDevuelta;
-  if (saldoHeader) patch[saldoHeader] = entregada - nuevaDevuelta;
+  if (saldoHeader) patch[saldoHeader] = redondear2(entregada - nuevaDevuelta);
   if (hoja.headers.indexOf("Fecha devolución") !== -1) patch["Fecha devolución"] = fechaHoy();
   if (hoja.headers.indexOf("Hora devolución") !== -1) patch["Hora devolución"] = horaAhora();
   // Se guarda también quién devolvió y quién recibió directamente en la fila de
@@ -313,7 +321,7 @@ function accionDevolverRequisicion(p) {
     const filaDev = {
       "ID Requisición": fila["ID"],
       Fecha: fechaHoy(),
-      [cantDevDevHeader]: p.cantidadDevuelta,
+      [cantDevDevHeader]: redondear2(Number(p.cantidadDevuelta)),
       "Quién devuelve (producción)": p.quienDevuelve,
       "Recibió (bodega)": p.recibio,
     };
@@ -415,6 +423,90 @@ function accionGetHistorial(p) {
   const reqData = accionGetRequisiciones(p);
   const ingData = accionGetIngresos(p);
   return { requisiciones: reqData.items, ingresos: ingData.items, unitLabel: mod.unitLabel };
+}
+
+// Trazabilidad de UN ítem específico (por código): junta en una sola lista de
+// movimientos — ingresos (entradas de stock nuevo), entregas (salidas hacia
+// producción) y devoluciones (entradas de vuelta) — con quién y cuándo hizo
+// cada uno, para poder ver "todo lo que le ha pasado a este ítem" sin tener
+// que cruzar varias hojas a mano. Se usa desde Inventario, al tocar un ítem.
+function accionGetHistorialItem(p) {
+  const mod = MODULES[p.modulo];
+  if (!mod) throw new Error("Módulo inválido");
+  const codigoBuscado = String(p.codigo || "").trim().toLowerCase();
+  if (!codigoBuscado) throw new Error("Falta el código del ítem");
+
+  const movimientos = [];
+
+  // Ingresos de stock — cada uno es una entrada.
+  const hojaIng = obtenerOCrearHoja(mod.ingresos, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad", "Ingresó", "Empresa", "Observación"]);
+  hojaIng.rows
+    .filter((r) => String(r["Código"] || "").trim().toLowerCase() === codigoBuscado)
+    .forEach((r) => {
+      movimientos.push({
+        tipo: "ingreso",
+        id: r["ID"],
+        cantidad: Number(r["Cantidad"]) || 0,
+        quien: r["Ingresó"] || "",
+        fecha: r["Fecha"] || "",
+        hora: r["Hora"] || "",
+        empresa: r["Empresa"] || "",
+        detalle: r["Observación"] || "",
+      });
+    });
+
+  // Requisiciones de este ítem — cada entrega es una salida, y si hubo
+  // devolución, esa es otra entrada aparte (con su propia fecha/hora).
+  const hojaReq = leerHoja(mod.requisiciones);
+  const cantEntHeader = buscarEncabezado(hojaReq.headers, "Cantidad entregada");
+  const cantDevHeader = buscarEncabezado(hojaReq.headers, "Cantidad devuelta");
+  hojaReq.rows
+    .filter((r) => String(r["Código"] || "").trim().toLowerCase() === codigoBuscado)
+    .forEach((r) => {
+      const entregada = cantEntHeader ? Number(r[cantEntHeader]) || 0 : 0;
+      if (entregada > 0) {
+        movimientos.push({
+          tipo: "salida",
+          id: r["ID"],
+          cantidad: entregada,
+          quien: r["Entregó (bodega)"] || "",
+          aQuien: r["Entregado a (producción)"] || "",
+          fecha: r["Fecha entrega"] || "",
+          hora: r["Hora entrega"] || "",
+          empresa: r["Empresa"] || "",
+        });
+      }
+      const devuelta = cantDevHeader ? Number(r[cantDevHeader]) || 0 : 0;
+      if (devuelta > 0) {
+        movimientos.push({
+          tipo: "devolucion",
+          id: r["ID"],
+          cantidad: devuelta,
+          quien: r["Quién devuelve (producción)"] || "",
+          aQuien: r["Recibió (bodega)"] || "",
+          fecha: r["Fecha devolución"] || "",
+          hora: r["Hora devolución"] || "",
+          empresa: r["Empresa"] || "",
+        });
+      }
+    });
+
+  movimientos.sort((a, b) => String(b.fecha + " " + b.hora).localeCompare(String(a.fecha + " " + a.hora)));
+
+  // Datos del ítem (referencia, stock actual) para el encabezado de la pantalla.
+  const hojaInv = leerHoja(mod.inventario);
+  const codigoInvHeader = buscarEncabezado(hojaInv.headers, "Código");
+  const refInvHeader = buscarEncabezado(hojaInv.headers, "Referencia");
+  const stockInvHeader = buscarEncabezado(hojaInv.headers, "Stock actual");
+  const itemInv = hojaInv.rows.find((r) => String(r[codigoInvHeader] || "").trim().toLowerCase() === codigoBuscado);
+
+  return {
+    codigo: p.codigo,
+    referencia: itemInv ? itemInv[refInvHeader] : "",
+    stockActual: itemInv && stockInvHeader ? itemInv[stockInvHeader] : "",
+    unitLabel: mod.unitLabel,
+    movimientos: movimientos,
+  };
 }
 
 // Reporte: inventario actual (para los KPI de estado) + consumo (kg/unidades entregados)
