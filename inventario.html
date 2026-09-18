@@ -71,7 +71,26 @@
     let ultimosHeaders = {};
 
     async function cargar() {
-      const invData = await apiGet("getInventario", { modulo: mod.key });
+      // Si algo falla (red, o el problema intermitente de Google con Apps
+      // Script), antes esta pantalla se quedaba en blanco sin ningún aviso —
+      // ahora se muestra el error y un botón para reintentar, en vez de dejar
+      // la lista vacía sin explicación.
+      try {
+        await cargarInterno();
+      } catch (err) {
+        document.getElementById("lista").innerHTML =
+          `<p style="font-size:13px;color:var(--rojo);margin-top:16px;">No se pudo cargar el inventario: ${err.message}</p>
+           <button class="btn btn-secondary" onclick="cargar()" style="margin-top:8px;">Reintentar</button>`;
+      }
+    }
+
+    async function cargarInterno() {
+      // empresa:"" a propósito — se trae el inventario COMPLETO (todas las
+      // empresas del módulo), no solo el de la empresa activa en el chip. En
+      // Insumos/Estibas (que manejan Contubos y Tecnipapel) cada ítem ya
+      // muestra su empresa en la tarjeta, así que sigue siendo claro cuál es
+      // cuál sin tener que ir cambiando el chip para ver todo el inventario.
+      const invData = await apiGet("getInventario", { modulo: mod.key, empresa: "" });
       const items = invData.items || [];
       ultimosItems = items;
       const codigoHeader = buscarEncabezado(items[0], "Código");
@@ -101,6 +120,7 @@
                   <div class="barra gauge-bar"><div class="fill gauge-fill" style="width:${pct}%;"></div></div>
                   <span class="txt">${stock} ${mod.unitLabel}</span>
                 </div>
+                ${it["Empresa"] ? `<p class="op">${it["Empresa"]}</p>` : ""}
                 <p class="op" style="color:var(--magenta);font-weight:700;margin-top:6px;">Toca para ver historial &#8594;</p>
               </a>`;
           }).join("");
@@ -113,6 +133,7 @@
             celda((it[stockHeader] || 0) + " " + mod.unitLabel) + celda(it[optimoHeader] || "") +
             celda(it["Estado"] || "") + "</tr>").join("");
     }
+    window.cargar = cargar;
     cargar();
 
     // Descarga en Excel: una sola hoja con el inventario actual tal como se
