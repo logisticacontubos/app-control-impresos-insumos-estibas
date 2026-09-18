@@ -366,3 +366,18 @@ textarea{resize:vertical;}
   margin-top:18px;padding-top:10px;border-top:1px solid var(--borde);
   font-size:10px;color:var(--gris);
 }
+/* Resumen de 5 estadísticas para reportes de trazabilidad (ítem: inventario
+   inicial, entradas, salidas, ajustes, saldo final) — reutilizable en
+   cualquier pantalla de reporte impreso. */
+.resumen-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;}
+.resumen-stats .stat{border:1px solid var(--borde);border-radius:10px;padding:8px 6px;text-align:center;}
+.resumen-stats .stat .l{font-size:8px;color:var(--gris);text-transform:uppercase;letter-spacing:.3px;margin:0 0 3px;}
+.resumen-stats .stat .v{font-size:12px;font-weight:800;margin:0;}
+.resumen-stats .stat.inicial .v{color:var(--texto,#1A1A1A);}
+.resumen-stats .stat.entradas .v{color:var(--verde);}
+.resumen-stats .stat.salidas .v{color:var(--magenta);}
+.resumen-stats .stat.ajustes .v{color:#854F0B;}
+.resumen-stats .stat.final{background:#EAF3DE;border-color:var(--verde);}
+.resumen-stats .stat.final .v{color:var(--verde);}
+tr.fila-inicial td{background:#F6F5F3 !important;font-weight:700;}
+tr.fila-ajuste td{background:#FAEEDA !important;}

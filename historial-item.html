@@ -45,20 +45,26 @@
       <button class="btn btn-secondary" id="btnPdf">Descargar PDF</button>
     </div>
 
-    <!-- Tabla para imprimir/PDF/Excel — respeta el filtro de fecha activo. -->
+    <!-- Resumen de 5 estadísticas (igual al mockup aprobado): inventario
+         inicial del rango, entradas, salidas, ajustes por corte y saldo final. -->
+    <div class="resumen-stats solo-impresion" id="resumenStats"></div>
+
+    <!-- Tabla para imprimir/PDF/Excel — respeta el filtro de fecha activo,
+         orden CRONOLÓGICO (más viejo primero) con una fila "Inicial" al
+         principio, igual al mockup aprobado. -->
     <div class="solo-impresion" style="overflow-x:auto;">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px;">
         <thead>
           <tr style="background:var(--fondo);text-align:left;">
-            <th style="padding:6px 8px;border:1px solid var(--borde);">Movimiento</th>
-            <th style="padding:6px 8px;border:1px solid var(--borde);">ID</th>
-            <th style="padding:6px 8px;border:1px solid var(--borde);">Cantidad</th>
-            <th style="padding:6px 8px;border:1px solid var(--borde);">Quién</th>
-            <th style="padding:6px 8px;border:1px solid var(--borde);">A quién</th>
-            <th style="padding:6px 8px;border:1px solid var(--borde);">Fecha</th>
-            <th style="padding:6px 8px;border:1px solid var(--borde);">Hora</th>
-            <th style="padding:6px 8px;border:1px solid var(--borde);">Empresa</th>
-            <th style="padding:6px 8px;border:1px solid var(--borde);">Saldo</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Fecha / hora</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Movimiento</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">ID</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Entrada</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Salida</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Saldo</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Quién</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">A quién</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Comentario / observación</th>
           </tr>
         </thead>
         <tbody id="tbodyImpresion"></tbody>
@@ -130,6 +136,33 @@
       corte: { texto: "Corte de inventario", signo: "", color: "var(--gris)" },
     };
 
+    function redondear2(n) {
+      return Math.round((Number(n) || 0) * 100) / 100;
+    }
+
+    // Arma el reporte (mismo formato que el mockup aprobado): orden
+    // cronológico ascendente, una fila "Inicial" reconstruida antes del
+    // primer movimiento del rango, y los 5 totales de resumen.
+    function construirReporte(items) {
+      const cron = items.slice().sort((a, b) => String(a.fecha + " " + a.hora).localeCompare(String(b.fecha + " " + b.hora)));
+      const stockActual = datosItem && datosItem.stockActual !== "" ? Number(datosItem.stockActual) : 0;
+      let inicial = stockActual;
+      if (cron.length > 0) {
+        const primero = cron[0];
+        if (primero.tipo === "corte") inicial = primero.cantidadSistema;
+        else if (primero.tipo === "ingreso" || primero.tipo === "devolucion") inicial = redondear2(primero.saldo - primero.cantidad);
+        else if (primero.tipo === "salida") inicial = redondear2(primero.saldo + primero.cantidad);
+      }
+      let totalEntradas = 0, totalSalidas = 0, ajustes = 0;
+      cron.forEach((m) => {
+        if (m.tipo === "ingreso" || m.tipo === "devolucion") totalEntradas = redondear2(totalEntradas + m.cantidad);
+        else if (m.tipo === "salida") totalSalidas = redondear2(totalSalidas + m.cantidad);
+        else if (m.tipo === "corte") ajustes = redondear2(ajustes + m.diferencia);
+      });
+      const final = cron.length > 0 ? cron[cron.length - 1].saldo : inicial;
+      return { inicial, totalEntradas, totalSalidas, ajustes, final, cron };
+    }
+
     function render() {
       const rango = rangoFecha(rangoActivo);
       itemsFiltrados = !rango ? movimientos : movimientos.filter((m) => m.fecha >= rango.desde && m.fecha <= rango.hasta);
@@ -161,20 +194,39 @@
               </div>`;
           }).join("");
 
-      const celda = (v) => `<td style="padding:6px 8px;border:1px solid var(--borde);">${v}</td>`;
+      const reporte = construirReporte(itemsFiltrados);
+      const unit = mod.unitLabel;
+
+      document.getElementById("resumenStats").innerHTML = `
+        <div class="stat inicial"><p class="l">Inventario inicial</p><p class="v">${reporte.inicial} ${unit}</p></div>
+        <div class="stat entradas"><p class="l">Total entradas</p><p class="v">+${reporte.totalEntradas} ${unit}</p></div>
+        <div class="stat salidas"><p class="l">Total salidas</p><p class="v">-${reporte.totalSalidas} ${unit}</p></div>
+        <div class="stat ajustes"><p class="l">Ajustes</p><p class="v">${reporte.ajustes > 0 ? "+" : ""}${reporte.ajustes} ${unit}</p></div>
+        <div class="stat final"><p class="l">Saldo final</p><p class="v">${reporte.final} ${unit}</p></div>
+      `;
+
+      const celda = (v) => `<td style="padding:6px 7px;border:1px solid var(--borde);">${v}</td>`;
+      const filaInicial = `<tr class="fila-inicial">` +
+        celda((reporte.cron[0] ? reporte.cron[0].fecha : "") + "") + celda("Inicial") + celda("-") +
+        celda(reporte.inicial + " " + unit) + celda("-") + celda(reporte.inicial + " " + unit) +
+        celda("Inventario al inicio del rango") + celda("-") + celda("-") +
+        "</tr>";
       document.getElementById("tbodyImpresion").innerHTML = itemsFiltrados.length === 0
         ? `<tr><td colspan="9" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">No hay movimientos en este rango.</td></tr>`
-        : itemsFiltrados.map((m) => {
+        : filaInicial + reporte.cron.map((m) => {
             const et = ETIQUETAS[m.tipo];
             const quienTxt = m.quien || "-";
             const aQuienTxt = m.tipo === "salida" ? (m.aQuien || "-") : m.tipo === "devolucion" ? (m.aQuien || "-") : "-";
-            const cantidadTxt = m.tipo === "corte"
-              ? "Contado " + m.cantidad + (m.diferencia ? " (dif. " + (m.diferencia > 0 ? "+" : "") + m.diferencia + ")" : "")
-              : et.signo + m.cantidad + " " + mod.unitLabel;
-            return "<tr>" +
-              celda(et.texto) + celda(m.id || "") + celda(cantidadTxt) +
-              celda(quienTxt) + celda(aQuienTxt) + celda(m.fecha || "") + celda(m.hora || "") + celda(m.empresa || "") +
-              celda(m.saldo !== undefined ? m.saldo : "") +
+            const entradaTxt = (m.tipo === "ingreso" || m.tipo === "devolucion") ? (m.cantidad + " " + unit) : "-";
+            const salidaTxt = m.tipo === "salida" ? (m.cantidad + " " + unit) : "-";
+            const comentario = m.tipo === "corte"
+              ? "Corte" + (m.diferencia ? " · dif. " + (m.diferencia > 0 ? "+" : "") + m.diferencia : "") + (m.detalle ? " · " + m.detalle : "")
+              : (m.detalle || "-");
+            const claseFila = m.tipo === "corte" && m.diferencia ? ' class="fila-ajuste"' : "";
+            return `<tr${claseFila}>` +
+              celda((m.fecha || "") + (m.hora ? " " + m.hora : "")) + celda(et.texto) + celda(m.id || "") +
+              celda(entradaTxt) + celda(salidaTxt) + celda(m.saldo !== undefined ? m.saldo + " " + unit : "") +
+              celda(quienTxt) + celda(aQuienTxt) + celda(comentario) +
               "</tr>";
           }).join("");
     }
@@ -217,17 +269,27 @@
     // momento (respeta el rango de fecha elegido con los chips).
     document.getElementById("btnExcel").addEventListener("click", () => {
       if (!datosItem) return;
+      const reporte = construirReporte(itemsFiltrados);
+      const unit = mod.unitLabel;
       const wb = XLSX.utils.book_new();
+      const filaInicial = ["Inicial", "", (reporte.cron[0] ? reporte.cron[0].fecha : ""), "", reporte.inicial, "", reporte.inicial, "-", "-", "Inventario al inicio del rango"];
       const filas = [
         ["Historial del ítem", datosItem.referencia || codigo, mod.label, empresaActual],
         ["Código", datosItem.codigo, "Stock actual", datosItem.stockActual !== "" ? datosItem.stockActual + " " + datosItem.unitLabel : ""],
         [],
-        ["Movimiento", "ID", "Cantidad", "Quién", "A quién", "Fecha", "Hora", "Empresa", "Saldo"],
-        ...itemsFiltrados.map((m) => {
+        ["Inventario inicial", reporte.inicial, "Total entradas", reporte.totalEntradas, "Total salidas", reporte.totalSalidas, "Ajustes", reporte.ajustes, "Saldo final", reporte.final],
+        [],
+        ["Movimiento", "ID", "Fecha", "Hora", "Entrada", "Salida", "Saldo", "Quién", "A quién", "Comentario"],
+        filaInicial,
+        ...reporte.cron.map((m) => {
           const et = ETIQUETAS[m.tipo];
           const aQuienTxt = m.tipo === "salida" || m.tipo === "devolucion" ? (m.aQuien || "") : "";
-          const cantidadTxt = m.tipo === "corte" ? m.cantidad : et.signo + m.cantidad;
-          return [et.texto, m.id || "", cantidadTxt, m.quien || "", aQuienTxt, m.fecha || "", m.hora || "", m.empresa || "", m.saldo !== undefined ? m.saldo : ""];
+          const entrada = (m.tipo === "ingreso" || m.tipo === "devolucion") ? m.cantidad : "";
+          const salida = m.tipo === "salida" ? m.cantidad : "";
+          const comentario = m.tipo === "corte"
+            ? "Corte" + (m.diferencia ? " · dif. " + (m.diferencia > 0 ? "+" : "") + m.diferencia : "") + (m.detalle ? " · " + m.detalle : "")
+            : (m.detalle || "");
+          return [et.texto, m.id || "", m.fecha || "", m.hora || "", entrada, salida, m.saldo !== undefined ? m.saldo : "", m.quien || "", aQuienTxt, comentario];
         }),
       ];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filas), "Historial");

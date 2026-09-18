@@ -579,32 +579,35 @@ function accionGetHistorialItem(p) {
       });
     });
 
-  // Saldo corrido: se calcula en orden CRONOLÓGICO (más viejo primero). Un
-  // corte reinicia el saldo a la cantidad contada ese día (es la definición
-  // misma de "corte": a partir de ahí el saldo es ese). Los demás movimientos
-  // suman o restan sobre el saldo anterior. Si no hay ningún corte previo,
-  // el saldo antes del primer movimiento se asume 0.
-  const cronologico = movimientos.slice().sort((a, b) => String(a.fecha + " " + a.hora).localeCompare(String(b.fecha + " " + b.hora)));
-  let saldoCorrido = 0;
-  cronologico.forEach((m) => {
-    if (m.tipo === "corte") {
-      saldoCorrido = m.cantidad;
-    } else if (m.tipo === "ingreso" || m.tipo === "devolucion") {
-      saldoCorrido = redondear2(saldoCorrido + m.cantidad);
-    } else if (m.tipo === "salida") {
-      saldoCorrido = redondear2(saldoCorrido - m.cantidad);
-    }
-    m.saldo = saldoCorrido;
-  });
-
-  movimientos.sort((a, b) => String(b.fecha + " " + b.hora).localeCompare(String(a.fecha + " " + a.hora)));
-
-  // Datos del ítem (referencia, stock actual) para el encabezado de la pantalla.
+  // Datos del ítem (referencia, stock actual) — el stock actual del inventario
+  // es el único dato que sabemos CIERTO ahora mismo (cada ingreso/entrega/
+  // devolución/corte ya le fue aplicado como un delta con ajustarStock).
   const hojaInv = leerHoja(mod.inventario);
   const codigoInvHeader = buscarEncabezado(hojaInv.headers, "Código");
   const refInvHeader = buscarEncabezado(hojaInv.headers, "Referencia");
   const stockInvHeader = buscarEncabezado(hojaInv.headers, "Stock actual");
   const itemInv = hojaInv.rows.find((r) => String(r[codigoInvHeader] || "").trim().toLowerCase() === codigoBuscado);
+  const stockActual = itemInv && stockInvHeader ? redondear2(Number(itemInv[stockInvHeader]) || 0) : 0;
+
+  // Saldo corrido: se calcula HACIA ATRÁS a partir del stock actual (el único
+  // punto que se sabe cierto), en vez de sumar hacia adelante desde un
+  // supuesto "0" inicial — ese supuesto era el error: si el ítem ya tenía
+  // existencias antes de que se empezara a usar la app (o antes del primer
+  // corte), sumar desde 0 daba saldos negativos sin sentido. Yendo de más
+  // reciente a más viejo y deshaciendo cada movimiento, el saldo mostrado en
+  // cada uno siempre cuadra con el stock real de hoy.
+  movimientos.sort((a, b) => String(b.fecha + " " + b.hora).localeCompare(String(a.fecha + " " + a.hora)));
+  let saldoDespues = stockActual;
+  movimientos.forEach((m) => {
+    m.saldo = saldoDespues;
+    if (m.tipo === "corte") {
+      saldoDespues = m.cantidadSistema; // lo que tenía el sistema justo antes de este corte
+    } else if (m.tipo === "ingreso" || m.tipo === "devolucion") {
+      saldoDespues = redondear2(saldoDespues - m.cantidad);
+    } else if (m.tipo === "salida") {
+      saldoDespues = redondear2(saldoDespues + m.cantidad);
+    }
+  });
 
   // Último corte registrado (el más reciente por fecha+hora) — para mostrar
   // un resumen en la parte de arriba de la pantalla ("Último corte: ...").
