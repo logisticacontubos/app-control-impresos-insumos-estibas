@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Historial del ítem · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="inventario.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Historial del ítem</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <div class="req-item" id="cardItem" style="margin-bottom:14px;"></div>
+
+    <div class="chip-row" id="filtrosFecha" style="margin-bottom:10px;">
+      <span class="chip" data-rango="hoy">Hoy</span>
+      <span class="chip" data-rango="ayer">Ayer</span>
+      <span class="chip" data-rango="semana">Semana</span>
+      <span class="chip" data-rango="mes">Mes</span>
+      <span class="chip" data-rango="todo">Todo</span>
+      <span class="chip" data-rango="personalizado">Fechas abiertas</span>
+    </div>
+    <div id="rangoPersonalizado" style="display:none;gap:8px;margin:0 0 12px;">
+      <input type="date" id="fechaDesde" style="flex:1;">
+      <input type="date" id="fechaHasta" style="flex:1;">
+    </div>
+
+    <div id="lista"></div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { mod } = ctx;
+    const params = new URLSearchParams(window.location.search);
+    const codigo = params.get("codigo") || "";
+    document.getElementById("backLink").href = "inventario.html?modulo=" + mod.key;
+    document.getElementById("titulo").textContent = "Historial del ítem";
+    document.getElementById("sub").textContent = mod.label;
+
+    let movimientos = [];
+    let rangoActivo = "todo";
+
+    // Mismo esquema de rangos rápidos que "Historial de movimientos": fechas
+    // ISO como strings, comparables directo con <= y >=.
+    function rangoFecha(modo) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const fmt = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      if (modo === "hoy") return { desde: fmt(hoy), hasta: fmt(hoy) };
+      if (modo === "ayer") {
+        const ayer = new Date(hoy);
+        ayer.setDate(ayer.getDate() - 1);
+        return { desde: fmt(ayer), hasta: fmt(ayer) };
+      }
+      if (modo === "semana") {
+        const inicio = new Date(hoy);
+        const diaSemana = (inicio.getDay() + 6) % 7;
+        inicio.setDate(inicio.getDate() - diaSemana);
+        return { desde: fmt(inicio), hasta: fmt(hoy) };
+      }
+      if (modo === "mes") {
+        const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        return { desde: fmt(inicio), hasta: fmt(hoy) };
+      }
+      if (modo === "personalizado") {
+        const desde = document.getElementById("fechaDesde").value;
+        const hasta = document.getElementById("fechaHasta").value;
+        if (!desde && !hasta) return null;
+        return { desde: desde || "0000-00-00", hasta: hasta || "9999-99-99" };
+      }
+      return null;
+    }
+
+    const ETIQUETAS = {
+      ingreso: { texto: "Ingreso de stock", signo: "+", color: "var(--verde)" },
+      salida: { texto: "Entrega", signo: "-", color: "var(--magenta)" },
+      devolucion: { texto: "Devolución", signo: "+", color: "var(--verde)" },
+    };
+
+    function render() {
+      const rango = rangoFecha(rangoActivo);
+      const items = !rango ? movimientos : movimientos.filter((m) => m.fecha >= rango.desde && m.fecha <= rango.hasta);
+
+      document.getElementById("lista").innerHTML = items.length === 0
+        ? '<p style="font-size:13px;color:var(--gris);margin-top:16px;">No hay movimientos en este rango.</p>'
+        : items.map((m) => {
+            const et = ETIQUETAS[m.tipo];
+            const quienTxt = m.tipo === "ingreso"
+              ? "Ingresó " + (m.quien || "-")
+              : m.tipo === "salida"
+                ? "Entregó " + (m.quien || "-") + " a " + (m.aQuien || "-")
+                : "Devolvió " + (m.quien || "-") + (m.aQuien ? " · recibió " + m.aQuien : "");
+            return `
+              <div class="req-item">
+                <div class="fila">
+                  <span class="reqid" style="font-size:14px;">${m.id || ""}</span>
+                  <span style="font-weight:700;color:${et.color};">${et.texto} · ${et.signo}${m.cantidad} ${mod.unitLabel}</span>
+                </div>
+                <p class="op">${quienTxt}</p>
+                <p class="op">${m.fecha}${m.hora ? " " + m.hora : ""}${m.empresa ? " · " + m.empresa : ""}</p>
+                ${m.detalle ? `<p class="op">${m.detalle}</p>` : ""}
+              </div>`;
+          }).join("");
+    }
+
+    async function cargar() {
+      const datos = await apiGet("getHistorialItem", { modulo: mod.key, codigo: codigo });
+      movimientos = datos.movimientos || [];
+      document.getElementById("cardItem").innerHTML = `
+        <div class="fila"><span class="reqid" style="font-size:15px;">${datos.referencia || codigo}</span></div>
+        <p class="op">Código: ${datos.codigo}</p>
+        ${datos.stockActual !== "" ? `<p class="op" style="font-weight:600;">Stock actual: ${datos.stockActual} ${datos.unitLabel}</p>` : ""}
+      `;
+      render();
+    }
+
+    document.querySelectorAll("#filtrosFecha .chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        rangoActivo = chip.dataset.rango;
+        document.querySelectorAll("#filtrosFecha .chip").forEach((c) => c.classList.toggle("on", c === chip));
+        document.getElementById("rangoPersonalizado").style.display = rangoActivo === "personalizado" ? "flex" : "none";
+        render();
+      });
+    });
+    document.getElementById("fechaDesde").addEventListener("change", render);
+    document.getElementById("fechaHasta").addEventListener("change", render);
+    document.querySelector('#filtrosFecha .chip[data-rango="todo"]').classList.add("on");
+
+    cargar();
+  }
+</script>
+</body>
+</html>

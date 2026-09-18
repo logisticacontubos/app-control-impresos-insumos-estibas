@@ -45,6 +45,12 @@
         <tbody id="tbodyImpresion"></tbody>
       </table>
     </div>
+    <!-- Pie propio del PDF: en computador, Chrome agrega su propio pie con
+         la URL/fecha (casilla "Encabezados y pies de página" del diálogo de
+         impresión), pero esa opción no existe en la mayoría de navegadores
+         de celular — así que esta información se dibuja aquí directamente
+         para que salga igual sin importar desde qué dispositivo se genere. -->
+    <div class="pie-pdf solo-impresion" id="piePdf"></div>
 
     <div id="lista" class="no-imprimir"></div>
   </main>
@@ -54,7 +60,7 @@
 <script>
   const ctx = requiereModulo();
   if (ctx) {
-    const { mod, empresaActual } = ctx;
+    const { usuario, mod, empresaActual } = ctx;
     document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
     document.getElementById("titulo").textContent = "Inventario";
     document.getElementById("sub").textContent = mod.label;
@@ -75,6 +81,8 @@
       ultimosHeaders = { codigoHeader, refHeader, stockHeader, optimoHeader };
 
       document.getElementById("subPdf").textContent = empresaActual + " · generado " + fechaHoy();
+      document.getElementById("piePdf").textContent =
+        "Generado por " + usuario.nombre + " (" + usuario.rol + ") · " + fechaHoy() + " " + horaActual() + " · " + window.location.hostname;
 
       document.getElementById("lista").innerHTML = items.length === 0
         ? '<p style="font-size:13px;color:var(--gris);">Sin datos de inventario todavía.</p>'
@@ -84,7 +92,7 @@
             const pct = Math.max(0, Math.min(100, (stock / optimo) * 100));
             const estado = it["Estado"] || "";
             return `
-              <div class="req-item">
+              <a class="req-item" href="historial-item.html?modulo=${mod.key}&codigo=${encodeURIComponent(it[codigoHeader] || "")}" style="display:block;text-decoration:none;color:inherit;">
                 <div class="fila">
                   <span class="reqid" style="font-size:14px;">${it[refHeader]}</span>
                   <span class="badge badge-${estado}">${estado}</span>
@@ -93,7 +101,8 @@
                   <div class="barra gauge-bar"><div class="fill gauge-fill" style="width:${pct}%;"></div></div>
                   <span class="txt">${stock} ${mod.unitLabel}</span>
                 </div>
-              </div>`;
+                <p class="op" style="color:var(--magenta);font-weight:700;margin-top:6px;">Toca para ver historial &#8594;</p>
+              </a>`;
           }).join("");
 
       const celda = (v) => `<td style="padding:6px 8px;border:1px solid var(--borde);">${v}</td>`;
