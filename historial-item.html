@@ -8,7 +8,7 @@
 </head>
 <body>
 <div class="app">
-  <header class="topbar">
+  <header class="topbar no-imprimir">
     <a class="back" id="backLink" href="inventario.html">&#8592;</a>
     <div>
       <h1 id="titulo">Historial del ítem</h1>
@@ -16,9 +16,17 @@
     </div>
   </header>
   <main>
-    <div class="req-item" id="cardItem" style="margin-bottom:14px;"></div>
+    <div class="encabezado-pdf solo-impresion">
+      <img id="logoPdf" src="" alt="">
+      <div class="txt">
+        <h2 id="tituloPdf">Historial del ítem</h2>
+        <p id="subPdf"></p>
+      </div>
+    </div>
 
-    <div class="chip-row" id="filtrosFecha" style="margin-bottom:10px;">
+    <div class="req-item no-imprimir" id="cardItem" style="margin-bottom:14px;"></div>
+
+    <div class="chip-row no-imprimir" id="filtrosFecha" style="margin-bottom:10px;">
       <span class="chip" data-rango="hoy">Hoy</span>
       <span class="chip" data-rango="ayer">Ayer</span>
       <span class="chip" data-rango="semana">Semana</span>
@@ -26,27 +34,59 @@
       <span class="chip" data-rango="todo">Todo</span>
       <span class="chip" data-rango="personalizado">Fechas abiertas</span>
     </div>
-    <div id="rangoPersonalizado" style="display:none;gap:8px;margin:0 0 12px;">
+    <div id="rangoPersonalizado" class="no-imprimir" style="display:none;gap:8px;margin:0 0 12px;">
       <input type="date" id="fechaDesde" style="flex:1;">
       <input type="date" id="fechaHasta" style="flex:1;">
     </div>
 
-    <div id="lista"></div>
+    <div class="btn-row no-imprimir" style="margin-bottom:12px;">
+      <button class="btn btn-secondary" id="btnExcel">Descargar Excel</button>
+      <button class="btn btn-secondary" id="btnPdf">Descargar PDF</button>
+    </div>
+
+    <!-- Tabla para imprimir/PDF/Excel — respeta el filtro de fecha activo. -->
+    <div class="solo-impresion" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr style="background:var(--fondo);text-align:left;">
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Movimiento</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">ID</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Cantidad</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Quién</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">A quién</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Fecha</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Hora</th>
+            <th style="padding:6px 8px;border:1px solid var(--borde);">Empresa</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyImpresion"></tbody>
+      </table>
+    </div>
+
+    <div id="lista" class="no-imprimir"></div>
+
+    <!-- Pie propio del PDF: ver nota en Inventario/Reporte — el pie que agrega
+         Chrome de escritorio no existe en la mayoría de navegadores de
+         celular, así que esta información se dibuja aquí directamente. -->
+    <div class="pie-pdf solo-impresion" id="piePdf"></div>
   </main>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/app.js"></script>
 <script>
   const ctx = requiereModulo();
   if (ctx) {
-    const { mod } = ctx;
+    const { usuario, mod, empresaActual } = ctx;
     const params = new URLSearchParams(window.location.search);
     const codigo = params.get("codigo") || "";
     document.getElementById("backLink").href = "inventario.html?modulo=" + mod.key;
     document.getElementById("titulo").textContent = "Historial del ítem";
     document.getElementById("sub").textContent = mod.label;
+    document.getElementById("logoPdf").src = empresaActual === "Tecnipapel" ? "assets/logo-tecnipapel.png" : "assets/logo-contubos.png";
 
     let movimientos = [];
-    let rangoActivo = "todo";
+    let itemsFiltrados = [];
+    let datosItem = null;
 
     // Mismo esquema de rangos rápidos que "Historial de movimientos": fechas
     // ISO como strings, comparables directo con <= y >=.
@@ -79,6 +119,8 @@
       return null;
     }
 
+    let rangoActivo = "todo";
+
     const ETIQUETAS = {
       ingreso: { texto: "Ingreso de stock", signo: "+", color: "var(--verde)" },
       salida: { texto: "Entrega", signo: "-", color: "var(--magenta)" },
@@ -87,11 +129,11 @@
 
     function render() {
       const rango = rangoFecha(rangoActivo);
-      const items = !rango ? movimientos : movimientos.filter((m) => m.fecha >= rango.desde && m.fecha <= rango.hasta);
+      itemsFiltrados = !rango ? movimientos : movimientos.filter((m) => m.fecha >= rango.desde && m.fecha <= rango.hasta);
 
-      document.getElementById("lista").innerHTML = items.length === 0
+      document.getElementById("lista").innerHTML = itemsFiltrados.length === 0
         ? '<p style="font-size:13px;color:var(--gris);margin-top:16px;">No hay movimientos en este rango.</p>'
-        : items.map((m) => {
+        : itemsFiltrados.map((m) => {
             const et = ETIQUETAS[m.tipo];
             const quienTxt = m.tipo === "ingreso"
               ? "Ingresó " + (m.quien || "-")
@@ -109,16 +151,37 @@
                 ${m.detalle ? `<p class="op">${m.detalle}</p>` : ""}
               </div>`;
           }).join("");
+
+      const celda = (v) => `<td style="padding:6px 8px;border:1px solid var(--borde);">${v}</td>`;
+      document.getElementById("tbodyImpresion").innerHTML = itemsFiltrados.length === 0
+        ? `<tr><td colspan="8" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">No hay movimientos en este rango.</td></tr>`
+        : itemsFiltrados.map((m) => {
+            const et = ETIQUETAS[m.tipo];
+            const quienTxt = m.tipo === "ingreso" ? (m.quien || "-") : (m.quien || "-");
+            const aQuienTxt = m.tipo === "salida" ? (m.aQuien || "-") : m.tipo === "devolucion" ? (m.aQuien || "-") : "-";
+            return "<tr>" +
+              celda(et.texto) + celda(m.id || "") + celda(et.signo + m.cantidad + " " + mod.unitLabel) +
+              celda(quienTxt) + celda(aQuienTxt) + celda(m.fecha || "") + celda(m.hora || "") + celda(m.empresa || "") +
+              "</tr>";
+          }).join("");
     }
 
     async function cargar() {
       const datos = await apiGet("getHistorialItem", { modulo: mod.key, codigo: codigo });
+      datosItem = datos;
       movimientos = datos.movimientos || [];
       document.getElementById("cardItem").innerHTML = `
         <div class="fila"><span class="reqid" style="font-size:15px;">${datos.referencia || codigo}</span></div>
         <p class="op">Código: ${datos.codigo}</p>
         ${datos.stockActual !== "" ? `<p class="op" style="font-weight:600;">Stock actual: ${datos.stockActual} ${datos.unitLabel}</p>` : ""}
       `;
+      document.getElementById("tituloPdf").textContent = "Historial · " + (datos.referencia || codigo);
+      document.getElementById("subPdf").textContent =
+        mod.label + " · " + empresaActual + " · Código " + datos.codigo +
+        (datos.stockActual !== "" ? " · Stock actual " + datos.stockActual + " " + datos.unitLabel : "") +
+        " · generado " + fechaHoy();
+      document.getElementById("piePdf").textContent =
+        "Generado por " + usuario.nombre + " (" + usuario.rol + ") · " + fechaHoy() + " " + horaActual() + " · " + window.location.hostname;
       render();
     }
 
@@ -133,6 +196,33 @@
     document.getElementById("fechaDesde").addEventListener("change", render);
     document.getElementById("fechaHasta").addEventListener("change", render);
     document.querySelector('#filtrosFecha .chip[data-rango="todo"]').classList.add("on");
+
+    // Descarga en Excel: los movimientos que están filtrados/visibles en ese
+    // momento (respeta el rango de fecha elegido con los chips).
+    document.getElementById("btnExcel").addEventListener("click", () => {
+      if (!datosItem) return;
+      const wb = XLSX.utils.book_new();
+      const filas = [
+        ["Historial del ítem", datosItem.referencia || codigo, mod.label, empresaActual],
+        ["Código", datosItem.codigo, "Stock actual", datosItem.stockActual !== "" ? datosItem.stockActual + " " + datosItem.unitLabel : ""],
+        [],
+        ["Movimiento", "ID", "Cantidad", "Quién", "A quién", "Fecha", "Hora", "Empresa"],
+        ...itemsFiltrados.map((m) => {
+          const et = ETIQUETAS[m.tipo];
+          const aQuienTxt = m.tipo === "salida" || m.tipo === "devolucion" ? (m.aQuien || "") : "";
+          return [et.texto, m.id || "", et.signo + m.cantidad, m.quien || "", aQuienTxt, m.fecha || "", m.hora || "", m.empresa || ""];
+        }),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filas), "Historial");
+      const nombre = `Historial_${(datosItem.referencia || codigo).replace(/[^a-z0-9]+/gi, "_")}_${fechaHoy()}.xlsx`;
+      XLSX.writeFile(wb, nombre);
+    });
+
+    // Descarga en PDF: mismo mecanismo que Inventario/Reporte (diálogo de
+    // impresión del navegador, con la tabla y el pie propio).
+    document.getElementById("btnPdf").addEventListener("click", () => {
+      window.print();
+    });
 
     cargar();
   }
