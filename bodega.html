@@ -49,8 +49,14 @@
       // Google y hacer que una de las 2 falle o se quede pegada.
       const datos = await apiGet("getBodegaDatos", { modulo: mod.key });
       const items = datos.requisiciones || [];
-      const pendientes = items.filter((r) => r.Estado === "Pendiente" || r.Estado === "Entregado parcial");
-      const entregadas = mod.hasDevolucion ? items.filter((r) => r.Estado === "Entregado") : [];
+      // Se ordena de la más reciente a la más antigua (IMP-0030 arriba, IMP-0001
+      // abajo) — así lo más nuevo queda siempre visible sin tener que
+      // desplazarse hasta el final de la lista. El ID ya viene con ceros a la
+      // izquierda (ej. "IMP-0030"), así que comparar el texto de mayor a menor
+      // ordena igual que comparar el número.
+      function porIdDescendente(a, b) { return String(b.ID || "").localeCompare(String(a.ID || "")); }
+      const pendientes = items.filter((r) => r.Estado === "Pendiente" || r.Estado === "Entregado parcial").sort(porIdDescendente);
+      const entregadas = mod.hasDevolucion ? items.filter((r) => r.Estado === "Entregado").sort(porIdDescendente) : [];
 
       const stockPorCodigo = {};
       (datos.inventario || []).forEach((it) => {
