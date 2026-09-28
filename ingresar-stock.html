@@ -50,6 +50,17 @@
     } else {
       let itemsInv = [];
 
+      // Clave de intento para "Registrar ingreso" (mismo mecanismo que en
+      // Nueva requisición): se mantiene mientras un intento sigue fallando
+      // (así un reintento tras un error de red no duplica el ingreso), y se
+      // renueva después de un ingreso exitoso, porque en esta pantalla se
+      // pueden registrar varios ingresos distintos seguidos sin recargar.
+      let idemIngreso = null;
+      function nuevaIdemSiHaceFalta() {
+        if (!idemIngreso) idemIngreso = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("idem-" + Date.now() + "-" + Math.random());
+        return idemIngreso;
+      }
+
       async function cargarItems() {
         const invData = await apiGet("getInventario", { modulo: mod.key });
         itemsInv = invData.items || [];
@@ -96,7 +107,9 @@
             cantidad: cantidad,
             ingreso: usuario.nombre,
             observacion: observacion,
+            idempotencia: nuevaIdemSiHaceFalta(),
           });
+          idemIngreso = null; // se guardó bien: el próximo clic es un ingreso nuevo, necesita clave nueva
           document.getElementById("inpCantidad").value = "";
           document.getElementById("inpObservacion").value = "";
           mostrarToast(`Ingreso registrado (${res.id})`);

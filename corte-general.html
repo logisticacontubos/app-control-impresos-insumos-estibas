@@ -34,6 +34,21 @@
       let estado = null; // { loteId, unitLabel, totalItems, itemsContados, items: [...] }
       let filtroActivo = "todos";
 
+      // Claves de intento (mismo mecanismo que en las demás pantallas): una
+      // por ítem para "Guardar este ítem" — se guarda en un mapa por índice
+      // porque aquí hay muchos ítems en la misma pantalla — y una sola para
+      // "Finalizar corte", que es una acción única por lote.
+      const idemPorItem = {};
+      function idemItem(idx) {
+        if (!idemPorItem[idx]) idemPorItem[idx] = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("idem-" + Date.now() + "-" + Math.random());
+        return idemPorItem[idx];
+      }
+      let idemFinalizar = null;
+      function idemParaFinalizar() {
+        if (!idemFinalizar) idemFinalizar = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("idem-" + Date.now() + "-" + Math.random());
+        return idemFinalizar;
+      }
+
       function estadoItem(it) {
         if (it.cantidadContada === "" || it.cantidadContada === null || it.cantidadContada === undefined) return "pendiente";
         const dif = redondear2(Number(it.cantidadContada) - Number(it.cantidadSistema));
@@ -191,7 +206,9 @@
             cantidadContada: cantidad,
             observacion: observacion,
             registro: usuario.nombre,
+            idempotencia: idemItem(idx),
           });
+          delete idemPorItem[idx]; // se guardó bien: si se vuelve a editar este ítem, es un intento nuevo
           it.cantidadContada = Number(cantidad);
           it.observacion = observacion;
           estado.itemsContados = res.itemsContados;
@@ -205,7 +222,7 @@
 
       async function finalizar() {
         try {
-          const res = await apiPost("finalizarCorteGeneral", { modulo: mod.key, loteId: estado.loteId, registro: usuario.nombre });
+          const res = await apiPost("finalizarCorteGeneral", { modulo: mod.key, loteId: estado.loteId, registro: usuario.nombre, idempotencia: idemParaFinalizar() });
           window.location.href = "reporte-corte-general.html?modulo=" + mod.key + "&loteId=" + encodeURIComponent(res.loteId);
         } catch (err) {
           document.getElementById("errorMsg").textContent = err.message;

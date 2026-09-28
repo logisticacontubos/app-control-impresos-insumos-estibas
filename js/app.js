@@ -190,11 +190,21 @@ async function apiPost(accion, datos, opts) {
     // ahí, es seguro reintentarlo solo en vez de que la persona piense que
     // escribió mal su PIN.
     const reintentos = accion === "login" ? 2 : 0;
-    return await fetchConReintento(() => fetch(API_URL, {
+    const resultado = await fetchConReintento(() => fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(body),
     }), reintentos);
+    // El backend marca "duplicadoEvitado" cuando reconoce que esta misma
+    // acción (misma "idempotencia") ya se había procesado antes — por
+    // ejemplo, la persona reintentó tras un error de red pero la primera vez
+    // sí se había guardado. Se avisa con alert() (no con el toast normal de
+    // la pantalla) para que se note siempre, sin importar en qué pantalla ni
+    // si justo después hay una redirección.
+    if (resultado && resultado.duplicadoEvitado) {
+      alert("Esto ya se había registrado antes (por un intento anterior) — no se volvió a duplicar.");
+    }
+    return resultado;
   } finally {
     if (!silencioso) ocultarCargando();
   }

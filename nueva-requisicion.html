@@ -54,6 +54,14 @@
       inpMotivo.required = true;
     }
 
+    // Clave de intento: se genera UNA sola vez al abrir este formulario, no en
+    // cada clic — así, si "Enviar a bodega" falla por un error de red/timeout
+    // (Google puede quedarse colgado sirviendo la respuesta aunque la
+    // requisición ya se haya guardado) y la persona vuelve a darle clic, el
+    // backend reconoce que es el MISMO intento y no crea una segunda
+    // requisición duplicada.
+    const idempotencia = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("idem-" + Date.now() + "-" + Math.random());
+
     let itemsInv = [];
     let stockHeader = "";
     async function cargarItems() {
@@ -97,6 +105,7 @@
         await apiPost("crearRequisicion", {
           modulo: mod.key, codigo, referencia, cantidad, motivo,
           solicito: usuario.nombre, cargo: usuario.cargo,
+          idempotencia: idempotencia,
         });
         window.location.href = "modulo.html?modulo=" + mod.key;
       } catch (err) {

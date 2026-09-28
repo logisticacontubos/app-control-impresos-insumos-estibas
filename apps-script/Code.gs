@@ -124,7 +124,7 @@ function accionLogin(p) {
 function accionGetInventario(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
-  const hoja = leerHoja(mod.inventario);
+  const hoja = leerHojaCacheada(mod.inventario);
   let rows = hoja.rows;
   if (p.empresa) {
     rows = rows.filter((r) => !r["Empresa"] || r["Empresa"] === p.empresa || r["Empresa"] === "Ambas");
@@ -135,7 +135,7 @@ function accionGetInventario(p) {
 function accionGetRequisiciones(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
-  const hoja = leerHoja(mod.requisiciones);
+  const hoja = leerHojaCacheada(mod.requisiciones);
   let rows = hoja.rows;
   if (p.empresa) rows = rows.filter((r) => !r["Empresa"] || r["Empresa"] === p.empresa);
   return { items: rows };
@@ -163,7 +163,7 @@ function accionGetPendientesGlobal(p) {
   const resultado = {};
   Object.keys(MODULES).forEach((key) => {
     const mod = MODULES[key];
-    const hoja = leerHoja(mod.requisiciones);
+    const hoja = leerHojaCacheada(mod.requisiciones);
     let rows = hoja.rows;
     if (p.empresa) rows = rows.filter((r) => !r["Empresa"] || r["Empresa"] === p.empresa);
     resultado[key] = rows.filter((r) => r.Estado === "Pendiente" || r.Estado === "Entregado parcial");
@@ -172,6 +172,10 @@ function accionGetPendientesGlobal(p) {
 }
 
 function accionCrearRequisicion(p) {
+  return conIdempotencia(p, function () { return accionCrearRequisicionInterna(p); });
+}
+
+function accionCrearRequisicionInterna(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
   if (!p.codigo || !p.cantidad) throw new Error("Falta el ítem o la cantidad");
@@ -245,6 +249,10 @@ function accionCrearRequisicion(p) {
 }
 
 function accionEntregarRequisicion(p) {
+  return conIdempotencia(p, function () { return accionEntregarRequisicionInterna(p); });
+}
+
+function accionEntregarRequisicionInterna(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
   if (!p.cantidadEntregada || !p.entregadoA) throw new Error("Falta la cantidad o el operario que recibe");
@@ -299,6 +307,10 @@ function accionEntregarRequisicion(p) {
 }
 
 function accionDevolverRequisicion(p) {
+  return conIdempotencia(p, function () { return accionDevolverRequisicionInterna(p); });
+}
+
+function accionDevolverRequisicionInterna(p) {
   const mod = MODULES[p.modulo];
   if (!mod || !mod.hasDevolucion) throw new Error("Este módulo no maneja devoluciones");
   if (!p.cantidadDevuelta || !p.quienDevuelve) throw new Error("Falta la cantidad o quién devuelve");
@@ -349,6 +361,10 @@ function accionDevolverRequisicion(p) {
 }
 
 function accionActualizarUmbrales(p) {
+  return conIdempotencia(p, function () { return accionActualizarUmbralesInterna(p); });
+}
+
+function accionActualizarUmbralesInterna(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
   const hoja = leerHoja(mod.inventario);
@@ -376,6 +392,10 @@ function accionActualizarUmbrales(p) {
 // ingresada. Pensado para Jefe de Logística y Supervisor de Inventarios
 // (roles "bodega" y "admin" en el sistema).
 function accionIngresarStock(p) {
+  return conIdempotencia(p, function () { return accionIngresarStockInterna(p); });
+}
+
+function accionIngresarStockInterna(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
   if (!p.codigo || !p.cantidad) throw new Error("Falta el ítem o la cantidad");
@@ -425,6 +445,10 @@ function accionIngresarStock(p) {
 // diferencia y el comentario — y accionGetHistorialItem lo usa además como
 // el punto de partida ("inventario inicial") de la trazabilidad de ese ítem.
 function accionRegistrarCorte(p) {
+  return conIdempotencia(p, function () { return accionRegistrarCorteInterna(p); });
+}
+
+function accionRegistrarCorteInterna(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
   if (!p.codigo || p.cantidadContada === undefined || p.cantidadContada === "") throw new Error("Falta el ítem o la cantidad contada");
@@ -576,6 +600,10 @@ function accionIniciarCorteGeneral(p) {
 // termina de escribir la cantidad contada de un ítem, así el progreso no se
 // pierde si cierra la app a la mitad.
 function accionGuardarConteoGeneral(p) {
+  return conIdempotencia(p, function () { return accionGuardarConteoGeneralInterna(p); });
+}
+
+function accionGuardarConteoGeneralInterna(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
   if (!p.loteId) throw new Error("Falta el lote del corte");
@@ -632,6 +660,10 @@ function accionGuardarConteoGeneral(p) {
 // ajuste de stock, misma fila en "<Módulo>_Cortes" para que quede en el
 // historial de ESE ítem también, no solo en el resumen del lote).
 function accionFinalizarCorteGeneral(p) {
+  return conIdempotencia(p, function () { return accionFinalizarCorteGeneralInterna(p); });
+}
+
+function accionFinalizarCorteGeneralInterna(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
   if (!p.loteId) throw new Error("Falta el lote del corte");
@@ -741,7 +773,7 @@ function accionFinalizarCorteGeneral(p) {
 function accionGetHistorialCortesGenerales(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
-  const hojaLotes = obtenerOCrearHoja(mod.cortesGenerales, HEADERS_CORTES_GENERALES);
+  const hojaLotes = obtenerOCrearHojaCacheada(mod.cortesGenerales, HEADERS_CORTES_GENERALES);
   const lotes = hojaLotes.rows
     .filter((r) => r["Estado"] === "Finalizado")
     .sort((a, b) => String(b["Fecha fin"] + " " + b["Hora fin"]).localeCompare(String(a["Fecha fin"] + " " + a["Hora fin"])));
@@ -756,11 +788,11 @@ function accionGetReporteCorteGeneral(p) {
   if (!mod) throw new Error("Módulo inválido");
   if (!p.loteId) throw new Error("Falta el lote del corte");
 
-  const hojaLotes = leerHoja(mod.cortesGenerales);
+  const hojaLotes = leerHojaCacheada(mod.cortesGenerales);
   const lote = hojaLotes.rows.find((r) => r["ID"] === p.loteId);
   if (!lote) throw new Error("Ese lote de corte no existe");
 
-  const hojaCortes = obtenerOCrearHoja(mod.cortes, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad sistema", "Cantidad contada", "Diferencia", "Registró", "Empresa", "Observación", "Lote"]);
+  const hojaCortes = obtenerOCrearHojaCacheada(mod.cortes, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad sistema", "Cantidad contada", "Diferencia", "Registró", "Empresa", "Observación", "Lote"]);
   const filas = hojaCortes.rows.filter((r) => r["Lote"] === p.loteId);
 
   return {
@@ -785,7 +817,7 @@ function accionGetReporteCorteGeneral(p) {
 function accionGetIngresos(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
-  const hoja = obtenerOCrearHoja(mod.ingresos, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad", "Ingresó", "Empresa", "Observación"]);
+  const hoja = obtenerOCrearHojaCacheada(mod.ingresos, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad", "Ingresó", "Empresa", "Observación"]);
   let rows = hoja.rows;
   if (p.empresa) rows = rows.filter((r) => !r["Empresa"] || r["Empresa"] === p.empresa);
   rows = rows.slice().sort((a, b) => String(b["Fecha"] + " " + b["Hora"]).localeCompare(String(a["Fecha"] + " " + a["Hora"])));
@@ -819,7 +851,7 @@ function accionGetHistorialItem(p) {
   const movimientos = [];
 
   // Ingresos de stock — cada uno es una entrada.
-  const hojaIng = obtenerOCrearHoja(mod.ingresos, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad", "Ingresó", "Empresa", "Observación"]);
+  const hojaIng = obtenerOCrearHojaCacheada(mod.ingresos, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad", "Ingresó", "Empresa", "Observación"]);
   hojaIng.rows
     .filter((r) => String(r["Código"] || "").trim().toLowerCase() === codigoBuscado)
     .forEach((r) => {
@@ -837,7 +869,7 @@ function accionGetHistorialItem(p) {
 
   // Requisiciones de este ítem — cada entrega es una salida, y si hubo
   // devolución, esa es otra entrada aparte (con su propia fecha/hora).
-  const hojaReq = leerHoja(mod.requisiciones);
+  const hojaReq = leerHojaCacheada(mod.requisiciones);
   const cantEntHeader = buscarEncabezado(hojaReq.headers, "Cantidad entregada");
   const cantDevHeader = buscarEncabezado(hojaReq.headers, "Cantidad devuelta");
   hojaReq.rows
@@ -875,7 +907,7 @@ function accionGetHistorialItem(p) {
   // control: además de quedar en la lista de movimientos, reinicia el saldo
   // corrido (ver más abajo) a la cantidad que se contó ese día, así que todo
   // lo anterior a un corte no afecta el saldo mostrado después de él.
-  const hojaCor = obtenerOCrearHoja(mod.cortes, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad sistema", "Cantidad contada", "Diferencia", "Registró", "Empresa", "Observación"]);
+  const hojaCor = obtenerOCrearHojaCacheada(mod.cortes, ["ID", "Fecha", "Hora", "Código", "Referencia", "Cantidad sistema", "Cantidad contada", "Diferencia", "Registró", "Empresa", "Observación"]);
   hojaCor.rows
     .filter((r) => String(r["Código"] || "").trim().toLowerCase() === codigoBuscado)
     .forEach((r) => {
@@ -896,7 +928,7 @@ function accionGetHistorialItem(p) {
   // Datos del ítem (referencia, stock actual) — el stock actual del inventario
   // es el único dato que sabemos CIERTO ahora mismo (cada ingreso/entrega/
   // devolución/corte ya le fue aplicado como un delta con ajustarStock).
-  const hojaInv = leerHoja(mod.inventario);
+  const hojaInv = leerHojaCacheada(mod.inventario);
   const codigoInvHeader = buscarEncabezado(hojaInv.headers, "Código");
   const refInvHeader = buscarEncabezado(hojaInv.headers, "Referencia");
   const stockInvHeader = buscarEncabezado(hojaInv.headers, "Stock actual");
@@ -945,14 +977,14 @@ function accionGetReporte(p) {
   const mod = MODULES[p.modulo];
   if (!mod) throw new Error("Módulo inválido");
 
-  const hojaInv = leerHoja(mod.inventario);
+  const hojaInv = leerHojaCacheada(mod.inventario);
   let itemsInv = hojaInv.rows;
   if (p.empresa) itemsInv = itemsInv.filter((r) => !r["Empresa"] || r["Empresa"] === p.empresa || r["Empresa"] === "Ambas");
 
   const codigoInvHeader = buscarEncabezado(hojaInv.headers, "Código");
   const refInvHeader = buscarEncabezado(hojaInv.headers, "Referencia");
 
-  const hojaReq = leerHoja(mod.requisiciones);
+  const hojaReq = leerHojaCacheada(mod.requisiciones);
   let reqs = hojaReq.rows;
   if (p.empresa) reqs = reqs.filter((r) => !r["Empresa"] || r["Empresa"] === p.empresa);
 
@@ -1122,6 +1154,157 @@ function obtenerOCrearHoja(nombre, headers) {
   return leerHoja(nombre);
 }
 
+// ==========================================================
+// CACHÉ CORTA para pantallas de solo lectura — la app se sentía lenta porque
+// cada pantalla (inventario, historial, requisiciones, reportes...) volvía a
+// leer la hoja completa de Google Sheets desde cero en cada carga, y cada
+// lectura de Sheets tiene una latencia fija importante. Estas dos funciones
+// son EXACTAMENTE iguales a leerHoja()/obtenerOCrearHoja() pero guardan el
+// resultado en caché por unos segundos, así que si 2 pantallas (o el mismo
+// usuario recargando) piden la misma hoja casi al mismo tiempo, la segunda
+// sale casi instantánea en vez de volver a leer todo de Sheets.
+//
+// A PROPÓSITO solo se usan en las acciones "getXxx" (solo consultan, nunca
+// escriben) — las acciones que SÍ escriben (crear requisición, entregar,
+// ingresar stock, registrar corte, etc.) siguen usando leerHoja()/
+// obtenerOCrearHoja() SIN caché, porque necesitan el número de fila y el
+// siguiente ID calculados con el dato más fresco posible; cachear esas
+// lecturas podría hacer que 2 acciones casi simultáneas calculen el mismo
+// "siguiente ID" o el mismo número de fila y se pisen entre sí — el mismo
+// problema de fondo que ya se corrigió antes con la generación de IDs.
+//
+// Se subió de 20s a 120s: 20 segundos era tan corto que, salvo que dos
+// personas abrieran la misma pantalla casi al mismo segundo, casi SIEMPRE
+// era una lectura "fría" (sin caché) — por eso seguía viéndose lento aunque
+// el caché ya estuviera activo. 2 minutos es un balance razonable: los datos
+// se pueden ver hasta 2 minutos desatrasados en pantallas de solo consulta,
+// pero cualquier acción que ESCRIBE (crear requisición, entregar, ingresar
+// stock, registrar corte) sigue leyendo siempre fresco y además invalida el
+// caché al instante, así que nadie ve su propia acción "desaparecida".
+const SEGUNDOS_CACHE_HOJA = 120;
+
+function leerHojaCacheada(nombre) {
+  const cache = CacheService.getScriptCache();
+  const clave = "hoja_" + nombre;
+  const guardado = cache.get(clave);
+  if (guardado) {
+    try { return JSON.parse(guardado); } catch (e) { /* si el JSON quedó corrupto, se relee abajo */ }
+  }
+  const hoja = leerHoja(nombre);
+  try {
+    // CacheService tiene un límite de 100KB por valor — si la hoja ya creció
+    // más que eso, simplemente no se guarda en caché (sigue funcionando
+    // igual, solo que sin el acelere) en vez de que la llamada falle.
+    cache.put(clave, JSON.stringify(hoja), SEGUNDOS_CACHE_HOJA);
+  } catch (e) { /* hoja muy grande para cachear, no pasa nada */ }
+  return hoja;
+}
+
+function obtenerOCrearHojaCacheada(nombre, headers) {
+  const cache = CacheService.getScriptCache();
+  const clave = "hoja_" + nombre;
+  const guardado = cache.get(clave);
+  if (guardado) {
+    try { return JSON.parse(guardado); } catch (e) { /* releer abajo si quedó corrupto */ }
+  }
+  const hoja = obtenerOCrearHoja(nombre, headers);
+  try {
+    cache.put(clave, JSON.stringify(hoja), SEGUNDOS_CACHE_HOJA);
+  } catch (e) { /* hoja muy grande para cachear */ }
+  return hoja;
+}
+
+// Se llama desde agregarFila()/actualizarCeldas() cada vez que una hoja
+// cambia, para que la próxima lectura (aunque sea 1 segundo después) ya no
+// entregue el dato viejo desde caché — así nadie ve su propia acción
+// "desaparecida" por culpa del acelere.
+function invalidarCacheHoja(nombre) {
+  CacheService.getScriptCache().remove("hoja_" + nombre);
+}
+
+// ==========================================================
+// EVITAR DUPLICADOS ("se está pegando la app... sale doble") — cuando una
+// petición que SÍ escribe (crear requisición, entregar, devolver) se demora
+// demasiado o Google se cuelga sirviendo la respuesta (el mismo problema
+// intermitente ya documentado en fetchConReintento en app.js), la app le
+// muestra un error a la persona aunque la fila YA se haya guardado en el
+// Sheets. Si la persona, al ver el error, vuelve a darle "Enviar"/"Entregar"
+// pensando que no se guardó, antes esto creaba una segunda fila duplicada.
+//
+// La solución: el navegador manda una "clave de intento" (un ID al azar que
+// genera una sola vez por formulario, no por cada clic) junto con los datos.
+// La primera vez que se ve esa clave, se ejecuta la acción normal y se
+// guarda el resultado en caché un rato. Si la MISMA clave vuelve a llegar
+// (porque la persona reintentó tras un error de red/timeout), en vez de
+// volver a crear la fila, se devuelve el mismo resultado de la primera vez
+// — así la segunda "entrega" no hace nada nuevo, solo confirma lo que ya
+// había pasado.
+//
+// Si el navegador no manda clave (por ejemplo, una versión vieja del sitio
+// que todavía no la envía), la función simplemente se ejecuta normal, igual
+// que antes — esto es 100% compatible hacia atrás.
+const SEGUNDOS_CACHE_IDEMPOTENCIA = 300;
+
+function conIdempotencia(p, ejecutar) {
+  const clave = (p && p.idempotencia) ? String(p.idempotencia).trim() : "";
+  if (!clave) return ejecutar();
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = "idem_" + clave;
+  const guardado = cache.get(cacheKey);
+  if (guardado) {
+    try {
+      const resultado = JSON.parse(guardado);
+      // Se marca "duplicadoEvitado: true" SOLO en esta respuesta (no se guarda
+      // así en caché) para que el front pueda avisar "esto ya se había
+      // registrado, no se duplicó" en vez de mostrar el mensaje de éxito
+      // normal como si fuera un envío nuevo.
+      if (resultado && typeof resultado === "object") resultado.duplicadoEvitado = true;
+      return resultado;
+    } catch (e) { /* si quedó corrupto, se ejecuta de nuevo abajo */ }
+  }
+
+  const resultado = ejecutar();
+  try {
+    cache.put(cacheKey, JSON.stringify(resultado), SEGUNDOS_CACHE_IDEMPOTENCIA);
+  } catch (e) { /* resultado muy grande para cachear, no pasa nada grave */ }
+  return resultado;
+}
+
+// ==========================================================
+// PRECALENTAR CACHÉ — para que casi nadie tenga que esperar una lectura fría.
+// Esta función simplemente vuelve a leer (y a guardar en caché) las hojas más
+// consultadas de los 3 módulos, cada pocos minutos, SOLA, sin que nadie tenga
+// la app abierta. Así, cuando una persona de verdad entra a "Inventario" o a
+// "Nueva requisición", casi siempre encuentra el dato ya tibio en caché en
+// vez de tener que esperar la lectura completa de Sheets.
+//
+// IMPORTANTE — esto no se ejecuta solo. Después de pegar este código y
+// guardar una "Nueva versión", hay que ejecutar UNA SOLA VEZ la función
+// configurarDisparadorCache() (seleccionarla en el desplegable de funciones
+// del editor de Apps Script y darle "Ejecutar"; la primera vez pedirá
+// autorización). Con eso queda programada para siempre — no hay que
+// repetirlo en cada despliegue futuro, salvo que se borre el disparador
+// manualmente desde el reloj (⏰) del editor.
+function precalentarCache() {
+  Object.keys(MODULES).forEach((key) => {
+    const mod = MODULES[key];
+    try { leerHojaCacheada(mod.inventario); } catch (e) { /* la hoja puede no existir todavía */ }
+    try { leerHojaCacheada(mod.requisiciones); } catch (e) {}
+  });
+}
+
+function configurarDisparadorCache() {
+  // Quita cualquier disparador viejo de esta misma función antes de crear
+  // uno nuevo, para no terminar con dos corriendo en paralelo si esto se
+  // ejecuta más de una vez por error.
+  ScriptApp.getProjectTriggers().forEach((t) => {
+    if (t.getHandlerFunction() === "precalentarCache") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("precalentarCache").timeBased().everyMinutes(5).create();
+  precalentarCache(); // deja el caché tibio desde ya, sin esperar los 5 minutos
+}
+
 // "hoja" es el objeto que ya devolvió leerHoja(nombreHoja) en quien llama a esta
 // función — se reutiliza en vez de volver a leer toda la hoja de nuevo aquí
 // adentro (antes se leía dos veces por cada fila agregada: una en la función
@@ -1139,16 +1322,35 @@ function agregarFila(nombreHoja, hoja, valoresPorEncabezado) {
   // escribe ahí directamente.
   const siguienteFila = hoja.headerRowIndex + 1 + hoja.rows.length + 1;
   sheet.getRange(siguienteFila, 1, 1, fila.length).setValues([fila]);
+  invalidarCacheHoja(nombreHoja);
 }
 
 function actualizarCeldas(nombreHoja, headers, numeroFila, valoresPorEncabezado) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(nombreHoja);
+
+  // ANTES esto hacía una llamada a Sheets POR CADA campo que cambiaba (hasta 5
+  // o 6 llamadas separadas solo para "Entregar" una requisición) — cada una de
+  // esas llamadas tiene su propia latencia de red, así que se iban sumando una
+  // detrás de otra y la operación completa terminaba tardando varios segundos.
+  // Eso era justo lo que estaba causando el error "La respuesta de Google no
+  // fue válida" que ves al registrar una entrega: Google corta/trunca la
+  // respuesta cuando la operación se demora demasiado.
+  //
+  // Ahora se hace en 2 llamadas fijas sin importar cuántos campos cambien: se
+  // lee la fila completa tal cual está en Sheets ahora mismo (con valores
+  // "crudos", no los ya formateados por leerHoja, para no dañar fechas u otros
+  // formatos al volver a escribirlos), se reemplazan solo las columnas que
+  // cambiaron, y se escribe la fila entera de una sola vez.
+  const rango = sheet.getRange(numeroFila, 1, 1, headers.length);
+  const filaActual = rango.getValues()[0];
   Object.keys(valoresPorEncabezado).forEach((header) => {
     const col = headers.indexOf(header);
     if (col === -1) return;
-    sheet.getRange(numeroFila, col + 1).setValue(valoresPorEncabezado[header]);
+    filaActual[col] = valoresPorEncabezado[header];
   });
+  rango.setValues([filaActual]);
+  invalidarCacheHoja(nombreHoja);
 }
 
 function buscarEncabezado(headers, prefijo) {

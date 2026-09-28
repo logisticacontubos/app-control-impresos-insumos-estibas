@@ -59,6 +59,16 @@
       let itemsInv = [];
       let headersInv = {};
 
+      // Mismo mecanismo de "clave de intento" que en Ingresar stock: se
+      // mantiene mientras el intento siga fallando, y se renueva tras
+      // registrar un corte con éxito (aquí también se pueden registrar
+      // varios cortes seguidos sin recargar la pantalla).
+      let idemCorte = null;
+      function nuevaIdemSiHaceFalta() {
+        if (!idemCorte) idemCorte = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("idem-" + Date.now() + "-" + Math.random());
+        return idemCorte;
+      }
+
       function itemSeleccionado() {
         const codigo = document.getElementById("selItem").value;
         return itemsInv.find((it) => it[headersInv.codigoHeader] === codigo);
@@ -159,7 +169,9 @@
             cantidadContada: cantidad,
             registro: usuario.nombre,
             observacion: observacion,
+            idempotencia: nuevaIdemSiHaceFalta(),
           });
+          idemCorte = null; // se guardó bien: el próximo corte necesita clave nueva
           document.getElementById("inpCantidad").value = "";
           document.getElementById("inpObservacion").value = "";
           mostrarToast(`Corte registrado (${res.id})`);

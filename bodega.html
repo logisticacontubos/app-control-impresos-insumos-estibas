@@ -42,6 +42,16 @@
     // Contubos y en Tecnipapel, y en los tres módulos.
     function claveCodigo(c) { return String(c || "").trim().toLowerCase(); }
 
+    // Clave de intento por formulario (ver el mismo mecanismo en
+    // nueva-requisicion.html): se genera una vez al dibujar cada tarjeta, y se
+    // guarda en el propio formulario (data-idem) — así, si "Entregar" o
+    // "Registrar devolución" falla por un error de red/timeout y la persona
+    // vuelve a darle clic al MISMO formulario (sin que la lista se haya vuelto
+    // a recargar), el backend reconoce que es el mismo intento y no lo aplica
+    // dos veces. Cada vez que cargar() vuelve a dibujar la lista, las tarjetas
+    // nuevas reciben una clave nueva.
+    function nuevoIdemKey() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("idem-" + Date.now() + "-" + Math.random()); }
+
     async function cargar() {
       // Una sola llamada combinada (requisiciones + inventario juntos) en vez
       // de 2 llamadas simultáneas — pedir 2 cosas al mismo tiempo a Apps
@@ -82,7 +92,7 @@
               <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
               ${detalleRequisicion(r, mod)}
               ${hayDisponible ? `<p style="font-size:12px;color:var(--gris);margin:0 0 8px;">Disponible en inventario: <strong style="color:var(--texto);">${disponible} ${mod.unitLabel}</strong></p>` : ""}
-              <form onsubmit="return entregar(event, '${r.ID}')">
+              <form onsubmit="return entregar(event, '${r.ID}')" data-idem="${nuevoIdemKey()}">
                 <input type="number" placeholder="Cantidad entregada (${mod.unitLabel})${r.Estado === "Entregado parcial" ? " · faltan " + saldo : ""}" class="inp-cant" step="0.01" min="0" required>
                 <input type="text" placeholder="Operario de producción que recibe" class="inp-recibe" required>
                 <button class="btn btn-entregar">Entregar</button>
@@ -100,7 +110,7 @@
               <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Entregado">Entregado</span></div>
               <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
               ${detalleRequisicion(r, mod)}
-              <form onsubmit="return devolver(event, '${r.ID}')">
+              <form onsubmit="return devolver(event, '${r.ID}')" data-idem="${nuevoIdemKey()}">
                 <input type="number" placeholder="Kg devuelto" class="inp-cant" step="0.01" min="0" required>
                 <input type="text" placeholder="Quién devuelve (producción)" class="inp-quien" required>
                 <button class="btn btn-primary">Registrar devolución</button>
@@ -128,7 +138,7 @@
       const cantidadEntregada = form.querySelector(".inp-cant").value;
       const entregadoA = form.querySelector(".inp-recibe").value;
       try {
-        const res = await apiPost("entregarRequisicion", { modulo: mod.key, id, cantidadEntregada, entregadoA, entrego: usuario.nombre });
+        const res = await apiPost("entregarRequisicion", { modulo: mod.key, id, cantidadEntregada, entregadoA, entrego: usuario.nombre, idempotencia: form.dataset.idem });
         if (res && res.estado === "Entregado parcial") {
           mostrarToast(`Entrega parcial registrada · faltan ${res.saldoPendiente} ${mod.unitLabel}`, 3200);
         } else {
@@ -146,7 +156,7 @@
       const cantidadDevuelta = form.querySelector(".inp-cant").value;
       const quienDevuelve = form.querySelector(".inp-quien").value;
       try {
-        await apiPost("devolverRequisicion", { modulo: mod.key, id, cantidadDevuelta, quienDevuelve, recibio: usuario.nombre });
+        await apiPost("devolverRequisicion", { modulo: mod.key, id, cantidadDevuelta, quienDevuelve, recibio: usuario.nombre, idempotencia: form.dataset.idem });
         cargar();
       } catch (err) { alert(err.message); }
       return false;
