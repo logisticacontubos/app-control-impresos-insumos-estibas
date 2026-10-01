@@ -365,6 +365,12 @@ textarea{resize:vertical;}
   .no-imprimir{display:none !important;}
   .solo-impresion{display:block;}
   body,.app{background:#fff;}
+  /* Por defecto, muchos navegadores (y "Guardar como PDF") QUITAN los
+     colores de fondo al imprimir, aunque el "color de texto" sí se vea — por
+     eso las insignias/colores de diferencia (verde/ámbar/rojo) podían salir
+     casi invisibles en el PDF. Esto fuerza a que se impriman tal cual se ven
+     en pantalla. */
+  *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
   .card,.card-stat,.req-item,.req-check{box-shadow:none;border:1px solid var(--borde);}
   /* La app está pensada para celular (max-width:480px) — eso también se
      aplicaba al imprimir, y por eso la tabla del reporte se veía cortada en
