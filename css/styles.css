@@ -360,6 +360,10 @@ textarea{resize:vertical;}
 .tecla-calc:active{background:var(--magenta-claro);}
 .tecla-calc.op{color:var(--magenta);}
 .tecla-calc.borrar,.tecla-calc.limpiar{color:var(--rojo);font-size:13px;}
+.tecla-calc.mas{
+  background:var(--magenta-claro);color:#72243E;margin:0 0 10px;font-size:16px;font-weight:700;
+}
+.tecla-calc.mas:active{background:var(--magenta);color:#fff;}
 .fila-botones-calc{display:flex;gap:8px;}
 .fila-botones-calc .btn{flex:1;font-size:13.5px;padding:12px 10px;}
 .progreso-corte{background:var(--fondo);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;}
