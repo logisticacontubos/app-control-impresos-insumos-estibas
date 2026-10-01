@@ -133,6 +133,7 @@
             <div class="teclado-calc">
               ${teclas.map((t) => `<div class="tecla-calc ${clases[t] || ""}" data-idx="${idx}" data-tecla="${t}">${t}</div>`).join("")}
             </div>
+            <div class="tecla-calc op mas" data-idx="${idx}" data-tecla="+">+ Sumar</div>
             <div class="fila-botones-calc">
               <button type="button" class="btn btn-secondary" data-calc-cancelar="${idx}">Cancelar</button>
               <button type="button" class="btn btn-primary" data-calc-usar="${idx}">Usar este total &#8594;</button>
