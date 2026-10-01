@@ -49,6 +49,185 @@
         return idemFinalizar;
       }
 
+      // --- Calculadora por ítem --------------------------------------
+      // Pensada primero para celular: botones grandes para tocar en vez de
+      // depender del teclado del teléfono (que no siempre muestra bien los
+      // signos +, -, *, /). Es JS propio, sin ninguna librería nueva, para
+      // que la app no pese más. El estado (si está abierta y qué llevan
+      // escrito) se guarda por índice de ítem y sobrevive a los repintados
+      // de la pantalla mientras se cuenta.
+      const calcState = {};
+      function obtenerCalc(idx) {
+        if (!calcState[idx]) calcState[idx] = { abierto: false, expr: "" };
+        return calcState[idx];
+      }
+
+      // Evalúa sumas/multiplicaciones simples (+ - * / y paréntesis) sin
+      // usar eval() — un parser chiquito propio para no traer ninguna
+      // librería de cálculo solo para esto. Si lo escrito no es válido
+      // todavía (p. ej. termina en un operador mientras se sigue tecleando)
+      // devuelve null en vez de reventar, para que el total en pantalla
+      // simplemente se quede esperando el siguiente número.
+      function evaluarExpresion(expr) {
+        let limpio = String(expr).replace(/\s+/g, "");
+        limpio = limpio.replace(/[+\-*/.]+$/, "");
+        if (limpio === "" || !/^[0-9+\-*/().]+$/.test(limpio)) return null;
+        try {
+          let i = 0;
+          function numero() {
+            if (limpio[i] === "+") i++; // "+" inicial suelto (p. ej. al pegar un comentario viejo que empezaba así)
+            const inicio = i;
+            if (limpio[i] === "-") i++;
+            while (i < limpio.length && /[0-9.]/.test(limpio[i])) i++;
+            if (i === inicio || (limpio[inicio] === "-" && i === inicio + 1)) throw new Error("num");
+            return Number(limpio.slice(inicio, i));
+          }
+          function parentesis() {
+            if (limpio[i] === "(") {
+              i++;
+              const v = suma();
+              if (limpio[i] !== ")") throw new Error("parentesis");
+              i++;
+              return v;
+            }
+            return numero();
+          }
+          function multiplicacion() {
+            let v = parentesis();
+            while (limpio[i] === "*" || limpio[i] === "/") {
+              const op = limpio[i]; i++;
+              const d = parentesis();
+              v = op === "*" ? v * d : v / d;
+            }
+            return v;
+          }
+          function suma() {
+            let v = multiplicacion();
+            while (limpio[i] === "+" || limpio[i] === "-") {
+              const op = limpio[i]; i++;
+              const d = multiplicacion();
+              v = op === "+" ? v + d : v - d;
+            }
+            return v;
+          }
+          const resultado = suma();
+          if (i !== limpio.length || !isFinite(resultado)) return null;
+          return Math.round(resultado * 100) / 100;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function formatearExpr(expr) {
+        return expr.replace(/\*/g, "×").replace(/\//g, "÷");
+      }
+
+      function panelCalcHTML(idx) {
+        const teclas = ["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", "C", "0", ".", "⌫"];
+        const clases = { "÷": "op", "×": "op", "−": "op", "C": "limpiar", "⌫": "borrar" };
+        return `
+          <div class="panel-calc" id="panelCalc-${idx}">
+            <p class="titulo-calc">Suma cada rollo/medida y se arma el total solo</p>
+            <div class="expr-box" id="exprBox-${idx}"></div>
+            <div class="total-calc"><span class="l">Total</span><span class="v" id="totalCalc-${idx}">0</span></div>
+            <div class="teclado-calc">
+              ${teclas.map((t) => `<div class="tecla-calc ${clases[t] || ""}" data-idx="${idx}" data-tecla="${t}">${t}</div>`).join("")}
+            </div>
+            <div class="fila-botones-calc">
+              <button type="button" class="btn btn-secondary" data-calc-cancelar="${idx}">Cancelar</button>
+              <button type="button" class="btn btn-primary" data-calc-usar="${idx}">Usar este total &#8594;</button>
+            </div>
+          </div>`;
+      }
+
+      function pintarPanelCalc(idx) {
+        const calc = obtenerCalc(idx);
+        const cajaEl = document.getElementById("exprBox-" + idx);
+        const totalEl = document.getElementById("totalCalc-" + idx);
+        if (!cajaEl || !totalEl) return;
+        if (calc.expr === "") {
+          cajaEl.textContent = "Toca los números para empezar a sumar...";
+          cajaEl.className = "expr-box vacio";
+        } else {
+          cajaEl.textContent = formatearExpr(calc.expr);
+          cajaEl.className = "expr-box";
+        }
+        const total = evaluarExpresion(calc.expr);
+        if (total === null) {
+          totalEl.textContent = "—";
+          totalEl.className = "v invalido";
+        } else {
+          totalEl.textContent = total + " " + estado.unitLabel;
+          totalEl.className = "v";
+        }
+      }
+
+      function teclaCalc(idx, tecla) {
+        const calc = obtenerCalc(idx);
+        if (tecla === "C") calc.expr = "";
+        else if (tecla === "⌫") calc.expr = calc.expr.slice(0, -1);
+        else calc.expr += ({ "×": "*", "÷": "/", "−": "-" })[tecla] || tecla;
+        pintarPanelCalc(idx);
+      }
+
+      function bindCalcListeners(idx) {
+        const panel = document.getElementById("panelCalc-" + idx);
+        if (!panel) return;
+        panel.querySelectorAll(".tecla-calc").forEach((btn) => {
+          btn.addEventListener("click", () => teclaCalc(idx, btn.dataset.tecla));
+        });
+        const btnCancelar = panel.querySelector("[data-calc-cancelar]");
+        if (btnCancelar) btnCancelar.addEventListener("click", () => cancelarCalc(idx));
+        const btnUsar = panel.querySelector("[data-calc-usar]");
+        if (btnUsar) btnUsar.addEventListener("click", () => usarTotalCalc(idx));
+        pintarPanelCalc(idx);
+      }
+
+      function toggleCalc(idx) {
+        const calc = obtenerCalc(idx);
+        if (calc.abierto) { cancelarCalc(idx); return; }
+        // Si el comentario ya tiene algo que se ve como una suma (p. ej. al
+        // volver a abrir un ítem que ya se había guardado), se precarga ahí
+        // para poder seguir editándola en vez de empezar de cero.
+        if (!calc.expr) {
+          const inputObs = document.getElementById("inpObs-" + idx);
+          const obsActual = inputObs ? inputObs.value.trim() : "";
+          if (obsActual && /^[0-9+\-*/.\s]+$/.test(obsActual)) calc.expr = obsActual.replace(/\s+/g, "");
+        }
+        calc.abierto = true;
+        const btnToggle = document.querySelector(`[data-calc-toggle="${idx}"]`);
+        if (btnToggle) {
+          btnToggle.textContent = "🧮 Ocultar calculadora";
+          btnToggle.insertAdjacentHTML("afterend", panelCalcHTML(idx));
+        }
+        bindCalcListeners(idx);
+      }
+
+      function cancelarCalc(idx) {
+        const calc = obtenerCalc(idx);
+        calc.abierto = false;
+        const panel = document.getElementById("panelCalc-" + idx);
+        if (panel) panel.remove();
+        const btnToggle = document.querySelector(`[data-calc-toggle="${idx}"]`);
+        if (btnToggle) btnToggle.textContent = "🧮 Usar calculadora";
+      }
+
+      function usarTotalCalc(idx) {
+        const calc = obtenerCalc(idx);
+        const total = evaluarExpresion(calc.expr);
+        if (total === null) {
+          mostrarToast("Escribe una suma válida antes de usar el total.");
+          return;
+        }
+        const inputCant = document.getElementById("inpContado-" + idx);
+        const inputObs = document.getElementById("inpObs-" + idx);
+        if (inputCant) inputCant.value = total;
+        if (inputObs) inputObs.value = calc.expr;
+        cancelarCalc(idx);
+        actualizarTarjeta(idx);
+        mostrarToast("Total aplicado: " + total + " " + estado.unitLabel);
+      }
+
       function estadoItem(it) {
         if (it.cantidadContada === "" || it.cantidadContada === null || it.cantidadContada === undefined) return "pendiente";
         const dif = redondear2(Number(it.cantidadContada) - Number(it.cantidadSistema));
@@ -110,6 +289,8 @@
                     <div class="campo"><label>Contado</label><input type="number" step="0.01" min="0" placeholder="0" value="${it.cantidadContada}" id="inpContado-${idxReal}" class="inpContado" data-idx="${idxReal}"></div>
                   </div>
                   <p class="dif-linea" id="difLinea-${idxReal}"></p>
+                  <button type="button" class="btn-calc-toggle" data-calc-toggle="${idxReal}">🧮 ${obtenerCalc(idxReal).abierto ? "Ocultar calculadora" : "Usar calculadora"}</button>
+                  ${obtenerCalc(idxReal).abierto ? panelCalcHTML(idxReal) : ""}
                   <label id="obsLabel-${idxReal}">Observación (opcional)</label>
                   <textarea rows="2" id="inpObs-${idxReal}" placeholder="Ej: rollo húmedo descartado...">${it.observacion || ""}</textarea>
                   <button class="btn btn-secondary btnGuardarConteo" data-idx="${idxReal}" style="margin-top:-2px;">Guardar este ítem</button>
@@ -130,6 +311,16 @@
         });
         document.querySelectorAll(".chip[data-filtro]").forEach((chip) => {
           chip.addEventListener("click", () => { filtroActivo = chip.dataset.filtro; render(); });
+        });
+        document.querySelectorAll(".btn-calc-toggle").forEach((btn) => {
+          btn.addEventListener("click", () => toggleCalc(Number(btn.dataset.calcToggle)));
+        });
+        // Si la pantalla se repintó por completo (p. ej. al cambiar de filtro)
+        // mientras una calculadora ya estaba abierta, hay que re-enganchar
+        // sus botones — el repintado reemplaza todo el HTML de la lista.
+        visibles.forEach((it) => {
+          const idxReal = estado.items.indexOf(it);
+          if (obtenerCalc(idxReal).abierto) bindCalcListeners(idxReal);
         });
         if (todosContados) {
           document.getElementById("btnFinalizar").addEventListener("click", finalizar);
