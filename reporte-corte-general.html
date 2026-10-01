@@ -93,15 +93,20 @@
               // Mismos 3 colores que ya usa el resto de la app (verde/ámbar/
               // rojo): faltante (negativo) en rojo porque es la más seria
               // -inventario de menos-, sobrante (positivo) en ámbar, y sin
-              // diferencia en verde — así las diferencias resaltan de un
-              // vistazo dentro de la lista completa.
+              // diferencia en verde. Para que resalte de verdad (no solo la
+              // insignia chiquita) se le pone además una franja de color a la
+              // izquierda de toda la tarjeta y una flecha — así se nota de un
+              // vistazo rápido sin tener que leer el número, y no depende solo
+              // del color por si alguien no distingue bien los colores.
+              const color = dif < 0 ? "var(--rojo)" : dif > 0 ? "var(--ambar)" : "var(--verde)";
               const claseBadge = dif < 0 ? "Crítico" : dif > 0 ? "Ajustado" : "Óptimo";
-              const textoBadge = dif === 0 ? "Sin diferencia" : (dif > 0 ? "+" : "") + dif + " " + unit;
+              const flecha = dif < 0 ? "&#9660; " : dif > 0 ? "&#9650; " : "&#10003; ";
+              const textoBadge = flecha + (dif === 0 ? "Sin diferencia" : (dif > 0 ? "+" : "") + dif + " " + unit);
               return `
-              <div class="req-item">
+              <div class="req-item" style="border-left:5px solid ${color};">
                 <div class="fila">
                   <span class="reqid" style="font-size:14px;">${d.referencia || d.codigo}</span>
-                  <span class="badge badge-${claseBadge}">${textoBadge}</span>
+                  <span class="badge badge-${claseBadge}" style="font-size:13px;padding:4px 10px;">${textoBadge}</span>
                 </div>
                 <p class="op">${d.codigo} · sistema ${d.cantidadSistema} &#8594; contado ${d.cantidadContada}</p>
                 ${d.observacion ? `<p class="op">${d.observacion}</p>` : ""}
@@ -114,9 +119,14 @@
           : datos.detalle.map((d) => {
               const dif = Number(d.diferencia) || 0;
               // Mismo criterio de color que las tarjetas de pantalla, para que
-              // el PDF/impresión resalte igual las diferencias.
+              // el PDF/impresión resalte igual las diferencias. Se usa fondo
+              // de color de verdad (no solo el texto) + flecha, porque el
+              // texto de color solo era muy sutil para notarlo de un vistazo
+              // en una tabla impresa con filas chiquitas.
+              const fondoDif = dif < 0 ? "var(--rojo-fondo)" : dif > 0 ? "var(--ambar-fondo)" : "var(--verde-fondo)";
               const colorDif = dif < 0 ? "var(--rojo)" : dif > 0 ? "var(--ambar)" : "var(--verde)";
-              const celdaDif = `<td style="padding:6px 7px;border:1px solid var(--borde);color:${colorDif};font-weight:700;">${dif === 0 ? "0" : (dif > 0 ? "+" : "") + dif}</td>`;
+              const flechaDif = dif < 0 ? "&#9660; " : dif > 0 ? "&#9650; " : "&#10003; ";
+              const celdaDif = `<td style="padding:6px 7px;border:1px solid var(--borde);background:${fondoDif};color:${colorDif};font-weight:700;">${flechaDif}${dif === 0 ? "0" : (dif > 0 ? "+" : "") + dif}</td>`;
               return "<tr>" +
                 celda(d.codigo || "") + celda(d.referencia || "") + celda(d.cantidadSistema) + celda(d.cantidadContada) +
                 celdaDif + celda(d.observacion || "") + "</tr>";
