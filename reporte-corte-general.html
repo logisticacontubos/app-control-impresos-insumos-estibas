@@ -90,12 +90,18 @@
           ? '<p style="font-size:13px;color:var(--gris);">Este corte no tiene ítems registrados.</p>'
           : datos.detalle.map((d) => {
               const dif = Number(d.diferencia) || 0;
-              const tieneDif = dif !== 0;
+              // Mismos 3 colores que ya usa el resto de la app (verde/ámbar/
+              // rojo): faltante (negativo) en rojo porque es la más seria
+              // -inventario de menos-, sobrante (positivo) en ámbar, y sin
+              // diferencia en verde — así las diferencias resaltan de un
+              // vistazo dentro de la lista completa.
+              const claseBadge = dif < 0 ? "Crítico" : dif > 0 ? "Ajustado" : "Óptimo";
+              const textoBadge = dif === 0 ? "Sin diferencia" : (dif > 0 ? "+" : "") + dif + " " + unit;
               return `
               <div class="req-item">
                 <div class="fila">
                   <span class="reqid" style="font-size:14px;">${d.referencia || d.codigo}</span>
-                  <span class="badge badge-${tieneDif ? "Ajustado" : "Óptimo"}">${tieneDif ? (dif > 0 ? "+" : "") + dif + " " + unit : "Sin diferencia"}</span>
+                  <span class="badge badge-${claseBadge}">${textoBadge}</span>
                 </div>
                 <p class="op">${d.codigo} · sistema ${d.cantidadSistema} &#8594; contado ${d.cantidadContada}</p>
                 ${d.observacion ? `<p class="op">${d.observacion}</p>` : ""}
@@ -107,9 +113,13 @@
           ? `<tr><td colspan="6" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">Este corte no tiene ítems registrados.</td></tr>`
           : datos.detalle.map((d) => {
               const dif = Number(d.diferencia) || 0;
+              // Mismo criterio de color que las tarjetas de pantalla, para que
+              // el PDF/impresión resalte igual las diferencias.
+              const colorDif = dif < 0 ? "var(--rojo)" : dif > 0 ? "var(--ambar)" : "var(--verde)";
+              const celdaDif = `<td style="padding:6px 7px;border:1px solid var(--borde);color:${colorDif};font-weight:700;">${dif === 0 ? "0" : (dif > 0 ? "+" : "") + dif}</td>`;
               return "<tr>" +
                 celda(d.codigo || "") + celda(d.referencia || "") + celda(d.cantidadSistema) + celda(d.cantidadContada) +
-                celda(dif === 0 ? "0" : (dif > 0 ? "+" : "") + dif) + celda(d.observacion || "") + "</tr>";
+                celdaDif + celda(d.observacion || "") + "</tr>";
             }).join("");
 
         document.getElementById("piePdf").textContent =
