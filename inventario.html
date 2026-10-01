@@ -29,6 +29,7 @@
       <button class="btn btn-secondary" id="btnPdf">Descargar PDF</button>
     </div>
     <a class="btn no-imprimir" id="btnCorteGeneral" href="#" style="display:none;text-decoration:none;text-align:center;margin-bottom:12px;background:linear-gradient(135deg,var(--magenta),#8f0d38);color:#fff;">&#128203; Corte mensual de inventario</a>
+    <a class="btn btn-secondary no-imprimir" id="btnUltimoReporte" href="#" style="display:none;text-decoration:none;text-align:center;margin-bottom:12px;">&#128424; Ver/imprimir último reporte de corte</a>
 
     <!-- Tabla para imprimir/PDF — el gauge visual de abajo no se ve bien
          impreso, así que el PDF/impresión usa una tabla simple en su lugar. -->
@@ -72,6 +73,23 @@
       const btnCG = document.getElementById("btnCorteGeneral");
       btnCG.href = "corte-general.html?modulo=" + mod.key;
       btnCG.style.display = "block";
+
+      // Acceso directo al reporte del corte general más reciente, para no
+      // tener que entrar primero al historial a buscarlo cada vez que alguien
+      // solo quiere imprimirlo. getHistorialCortesGenerales ya devuelve los
+      // lotes finalizados ordenados del más reciente al más antiguo, así que
+      // el primero de la lista es siempre el último corte hecho.
+      (async () => {
+        try {
+          const hist = await apiGet("getHistorialCortesGenerales", { modulo: mod.key }, { silencioso: true });
+          const ultimo = (hist.lotes || [])[0];
+          if (ultimo) {
+            const btnUlt = document.getElementById("btnUltimoReporte");
+            btnUlt.href = "reporte-corte-general.html?modulo=" + mod.key + "&loteId=" + encodeURIComponent(ultimo["ID"]) + "&imprimir=1";
+            btnUlt.style.display = "block";
+          }
+        } catch (err) { /* si falla, simplemente no se muestra el botón — no es crítico para ver el inventario */ }
+      })();
     }
 
     let ultimosItems = [];

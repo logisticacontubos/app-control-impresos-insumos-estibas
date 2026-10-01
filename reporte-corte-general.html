@@ -33,7 +33,7 @@
 
     <div class="resumen-cg" id="resumenCg"></div>
 
-    <p style="font-size:12px;color:var(--gris);margin:8px 0 8px;" id="tituloDetalle">Ítems con diferencia</p>
+    <p style="font-size:12px;color:var(--gris);margin:8px 0 8px;" id="tituloDetalle">Detalle completo del corte</p>
     <div id="detalle"></div>
 
     <div class="solo-impresion" style="overflow-x:auto;">
@@ -82,27 +82,48 @@
           <div class="stat neto" style="grid-column:span 2;"><p class="l">Ajuste neto</p><p class="v">${datos.ajusteNeto > 0 ? "+" : ""}${datos.ajusteNeto} ${unit}</p></div>
         `;
 
+        // Se muestran TODOS los ítems contados (no solo los que tuvieron
+        // diferencia) — cada tarjeta trae sistema, contado y diferencia; la
+        // insignia cambia de color/texto solo para que las diferencias
+        // resalten dentro de la lista completa, no para ocultar el resto.
         document.getElementById("detalle").innerHTML = datos.detalle.length === 0
-          ? '<p style="font-size:13px;color:var(--gris);">Sin diferencias — todo el inventario coincidió con el sistema.</p>'
-          : datos.detalle.map((d) => `
+          ? '<p style="font-size:13px;color:var(--gris);">Este corte no tiene ítems registrados.</p>'
+          : datos.detalle.map((d) => {
+              const dif = Number(d.diferencia) || 0;
+              const tieneDif = dif !== 0;
+              return `
               <div class="req-item">
                 <div class="fila">
                   <span class="reqid" style="font-size:14px;">${d.referencia || d.codigo}</span>
-                  <span class="badge badge-Ajustado">${Number(d.diferencia) > 0 ? "+" : ""}${d.diferencia} ${unit}</span>
+                  <span class="badge badge-${tieneDif ? "Ajustado" : "Óptimo"}">${tieneDif ? (dif > 0 ? "+" : "") + dif + " " + unit : "Sin diferencia"}</span>
                 </div>
                 <p class="op">${d.codigo} · sistema ${d.cantidadSistema} &#8594; contado ${d.cantidadContada}</p>
                 ${d.observacion ? `<p class="op">${d.observacion}</p>` : ""}
-              </div>`).join("");
+              </div>`;
+            }).join("");
 
         const celda = (v) => `<td style="padding:6px 7px;border:1px solid var(--borde);">${v}</td>`;
         document.getElementById("tbodyImpresion").innerHTML = datos.detalle.length === 0
-          ? `<tr><td colspan="6" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">Sin diferencias.</td></tr>`
-          : datos.detalle.map((d) => "<tr>" +
-              celda(d.codigo || "") + celda(d.referencia || "") + celda(d.cantidadSistema) + celda(d.cantidadContada) +
-              celda((Number(d.diferencia) > 0 ? "+" : "") + d.diferencia) + celda(d.observacion || "") + "</tr>").join("");
+          ? `<tr><td colspan="6" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">Este corte no tiene ítems registrados.</td></tr>`
+          : datos.detalle.map((d) => {
+              const dif = Number(d.diferencia) || 0;
+              return "<tr>" +
+                celda(d.codigo || "") + celda(d.referencia || "") + celda(d.cantidadSistema) + celda(d.cantidadContada) +
+                celda(dif === 0 ? "0" : (dif > 0 ? "+" : "") + dif) + celda(d.observacion || "") + "</tr>";
+            }).join("");
 
         document.getElementById("piePdf").textContent =
           "Generado por " + usuario.nombre + " (" + usuario.rol + ") · " + fechaHoy() + " " + horaActual() + " · " + window.location.hostname;
+
+        // Si se llegó aquí desde el acceso directo "Ver/imprimir último
+        // reporte" (inventario.html agrega &imprimir=1 al enlace), se abre el
+        // diálogo de impresión solo, sin que la persona tenga que buscar y
+        // darle clic a "Descargar PDF" aparte. El pequeño retraso deja que el
+        // navegador termine de pintar la tabla/encabezado de impresión antes
+        // de abrir el diálogo.
+        if (params.get("imprimir") === "1") {
+          setTimeout(() => window.print(), 300);
+        }
       } catch (err) {
         document.getElementById("errorMsg").textContent = err.message;
         document.getElementById("errorMsg").style.display = "block";
