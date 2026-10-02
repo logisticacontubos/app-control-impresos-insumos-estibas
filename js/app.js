@@ -49,7 +49,7 @@ const MODULOS = {
   impresos: { key: "impresos", label: "Impresos", itemLabel: "Impreso", unitLabel: "kg", empresas: ["Contubos"], hasDevolucion: true },
   insumos: { key: "insumos", label: "Insumos", itemLabel: "Insumo", unitLabel: "un.", empresas: ["Contubos", "Tecnipapel"], hasDevolucion: false },
   estibas: { key: "estibas", label: "Estibas", itemLabel: "Estiba", unitLabel: "un.", empresas: ["Contubos", "Tecnipapel"], hasDevolucion: false },
-  materiaPrima: { key: "materiaPrima", label: "Materia Prima", itemLabel: "Materia prima", unitLabel: "un.", empresas: ["Tecnipapel"], hasDevolucion: false },
+  materiaPrima: { key: "materiaPrima", label: "Materia Prima", itemLabel: "Materia prima", unitLabel: "kg", empresas: ["Tecnipapel"], hasDevolucion: false },
 };
 function moduloDesdeURL() {
   const params = new URLSearchParams(window.location.search);
