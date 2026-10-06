@@ -44,7 +44,7 @@
 <script>
   const ctx = requiereModulo();
   if (ctx) {
-    const { usuario, mod } = ctx;
+    const { usuario, mod, empresaActual } = ctx;
     const params = new URLSearchParams(window.location.search);
     const codigoUrl = params.get("codigo") || "";
     document.getElementById("backLink").href = codigoUrl
@@ -101,7 +101,11 @@
       }
 
       async function cargarItems() {
-        const invData = await apiGet("getInventario", { modulo: mod.key, empresa: "" });
+        // Filtrado por empresa activa — en los módulos con inventario propio
+        // por empresa (Insumos, Estibas) este selector debe mostrar solo los
+        // ítems de la empresa con la que se está trabajando ahorita, no los
+        // de ambas mezclados.
+        const invData = await apiGet("getInventario", { modulo: mod.key, empresa: empresaActual });
         itemsInv = invData.items || [];
         const codigoHeader = buscarEncabezado(itemsInv[0], "Código");
         const refHeader = buscarEncabezado(itemsInv[0], "Referencia");

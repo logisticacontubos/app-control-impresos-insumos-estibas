@@ -35,7 +35,7 @@
 <script>
   const ctx = requiereModulo();
   if (ctx) {
-    const { usuario, mod } = ctx;
+    const { usuario, mod, empresaActual } = ctx;
     document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
     document.getElementById("titulo").textContent = "Nueva requisición";
     document.getElementById("sub").textContent = mod.label;
@@ -65,7 +65,13 @@
     let itemsInv = [];
     let stockHeader = "";
     async function cargarItems() {
-      const invData = await apiGet("getInventario", { modulo: mod.key });
+      // Se filtra por la empresa activa (empresaActual) para que, en los
+      // módulos donde cada empresa tiene su propio inventario (Insumos,
+      // Estibas), no se mezclen en el selector ítems que en realidad son de
+      // la otra empresa — eso evitaba que, por error, se pidiera algo que ni
+      // siquiera existe en el stock de la empresa con la que se está
+      // trabajando ahorita.
+      const invData = await apiGet("getInventario", { modulo: mod.key, empresa: empresaActual });
       itemsInv = invData.items || [];
       const codigoHeader = buscarEncabezado(itemsInv[0], "Código");
       const refHeader = buscarEncabezado(itemsInv[0], "Referencia");
