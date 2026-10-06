@@ -424,7 +424,11 @@
 
       async function cargar() {
         try {
-          estado = await apiGet("iniciarCorteGeneral", { modulo: mod.key, empresa: "", registro: usuario.nombre });
+          // Se filtra por la empresa activa — en los módulos con inventario
+          // separado por empresa (Insumos, Estibas) cada empresa hace su
+          // propio corte mensual por separado, en vez de contar los ítems de
+          // las dos empresas mezclados en un solo lote.
+          estado = await apiGet("iniciarCorteGeneral", { modulo: mod.key, empresa: empresaActual, registro: usuario.nombre });
           render();
         } catch (err) {
           document.getElementById("contenido").innerHTML =

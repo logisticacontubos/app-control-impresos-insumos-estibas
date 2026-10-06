@@ -110,12 +110,16 @@
     }
 
     async function cargarInterno() {
-      // empresa:"" a propósito — se trae el inventario COMPLETO (todas las
-      // empresas del módulo), no solo el de la empresa activa en el chip. En
-      // Insumos/Estibas (que manejan Contubos y Tecnipapel) cada ítem ya
-      // muestra su empresa en la tarjeta, así que sigue siendo claro cuál es
-      // cuál sin tener que ir cambiando el chip para ver todo el inventario.
-      const invData = await apiGet("getInventario", { modulo: mod.key, empresa: "" });
+      // Se filtra por la empresa activa (empresaActual) — antes se traía el
+      // inventario COMPLETO (empresa:"") a propósito, porque casi no había
+      // ítems separados por empresa y mezclarlos todos con su etiqueta era
+      // más cómodo. Ahora que Insumos (y Estibas) separaron casi todo su
+      // inventario por empresa, mezclarlos hacía que al entrar en Tecnipapel
+      // lo primero que se viera (y en volumen) fueran los ítems de Contubos.
+      // Los ítems realmente compartidos (Empresa en blanco o "Ambas") se
+      // siguen mostrando igual en las dos empresas — el backend ya los deja
+      // pasar aunque se filtre por una empresa específica.
+      const invData = await apiGet("getInventario", { modulo: mod.key, empresa: empresaActual });
       const items = invData.items || [];
       ultimosItems = items;
       const codigoHeader = buscarEncabezado(items[0], "Código");
