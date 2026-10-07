@@ -3,70 +3,172 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Compras · Control de Impresos - Insumos - Estibas</title>
+<title>Vista de compras · Control de Impresos - Insumos - Estibas</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 <div class="app">
   <header class="topbar">
-    <a class="back" id="backLink" href="modulo.html">&#8592;</a>
+    <a class="back" href="home.html">&#8592;</a>
     <div>
-      <h1 id="titulo">Compras</h1>
-      <p class="sub" id="sub"></p>
+      <h1>Vista de compras</h1>
+      <p class="sub">Impresos · Insumos · Materia Prima</p>
     </div>
   </header>
   <main>
+    <div class="chip-row" id="chipsModulo"></div>
+    <div class="chip-row" id="chipsEmpresa" style="display:none;"></div>
     <div id="lista"></div>
   </main>
 </div>
 <script src="js/app.js"></script>
 <script>
-  const ctx = requiereModulo();
-  if (ctx) {
-    const { usuario, mod } = ctx;
-    document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
-    document.getElementById("titulo").textContent = "Vista de compras";
-    document.getElementById("sub").textContent = mod.label;
+const usuario = requiereSesion();
+
+// Vista de compras: junta Impresos + Insumos + Materia Prima en una sola
+// pantalla, SIN necesidad de entrar a un módulo específico ni de cambiar de
+// empresa para ver "lo que tiene cada una" — a diferencia de las demás
+// pantallas, esta no depende de un "?modulo=" en la URL. Estibas queda
+// afuera a propósito: ese inventario todavía no está completo ni
+// funcionando (igual que en el resto de la app).
+const MODULOS_COMPRAS = ["impresos", "insumos", "materiaPrima"];
+
+if (usuario) {
+  if (["compras", "bodega", "admin"].indexOf(usuario.rol) === -1) {
+    window.location.href = "home.html";
+  } else {
+    mostrarUsuarioEnHeader(usuario);
+    mostrarBotonActualizar();
+    mostrarBotonSalir();
+
     const editable = puedeEditarUmbrales(usuario.rol);
+    // Solo los módulos a los que este usuario tiene acceso (un usuario de
+    // "Ambas" empresas los ve los 3; uno de una sola empresa solo ve los que
+    // le aplican, igual que en el resto de la app).
+    const modulosDisponibles = MODULOS_COMPRAS
+      .map((k) => MODULOS[k])
+      .filter((m) => puedeAccederModulo(usuario, m.key));
+
+    let moduloActivo = modulosDisponibles[0];
+    let empresaActiva = "todos";
+
+    function renderChipsModulo() {
+      document.getElementById("chipsModulo").innerHTML = modulosDisponibles.map((m) => `
+        <span class="chip ${m.key === moduloActivo.key ? "on" : ""}" onclick="cambiarModulo('${m.key}')">${m.label}</span>
+      `).join("");
+    }
+
+    // El chip de empresa solo aparece cuando el módulo activo de verdad
+    // maneja las dos empresas (Insumos) Y este usuario puede ver ambas — en
+    // Impresos (solo Contubos) o Materia Prima (solo Tecnipapel) no hay nada
+    // que elegir, y a un usuario de una sola empresa tampoco hay que
+    // mostrarle un selector que no necesita.
+    function renderChipsEmpresa() {
+      const cont = document.getElementById("chipsEmpresa");
+      const disponibles = empresasParaUsuario(usuario, moduloActivo.key);
+      if (disponibles.length < 2) {
+        cont.style.display = "none";
+        empresaActiva = disponibles[0] || "todos";
+        return;
+      }
+      cont.style.display = "flex";
+      const opciones = [{ v: "todos", l: "Todas las empresas" }].concat(
+        disponibles.map((e) => ({ v: e, l: e }))
+      );
+      if (!opciones.some((o) => o.v === empresaActiva)) empresaActiva = "todos";
+      cont.innerHTML = opciones.map((o) => `
+        <span class="chip ${o.v === empresaActiva ? "on" : ""}" onclick="cambiarEmpresa('${o.v}')">${o.l}</span>
+      `).join("");
+    }
+
+    window.cambiarModulo = function (key) {
+      moduloActivo = MODULOS[key];
+      empresaActiva = "todos";
+      renderChipsModulo();
+      renderChipsEmpresa();
+      cargar();
+    };
+    window.cambiarEmpresa = function (e) {
+      empresaActiva = e;
+      renderChipsEmpresa();
+      cargar();
+    };
 
     async function cargar() {
-      const invData = await apiGet("getInventario", { modulo: mod.key });
-      const items = invData.items || [];
+      const cont = document.getElementById("lista");
+      cont.innerHTML = '<p class="loading">Cargando...</p>';
+      const empresaParam = empresaActiva === "todos" ? "" : empresaActiva;
+      // empresa se pasa siempre explícita (aunque sea "") para que esta
+      // pantalla no herede la "empresa activa" que usan las demás pantallas
+      // de módulo (sessionStorage) — Vista de compras maneja su propio
+      // filtro de empresa, independiente de eso.
+      const data = await apiGet("getInventario", { modulo: moduloActivo.key, empresa: empresaParam });
+      const items = data.items || [];
+
+      if (items.length === 0) {
+        cont.innerHTML = '<p style="font-size:13px;color:var(--gris);text-align:center;padding:24px 0;">No hay ítems en este filtro.</p>';
+        return;
+      }
+
       const codigoHeader = buscarEncabezado(items[0], "Código");
       const refHeader = buscarEncabezado(items[0], "Referencia");
       const stockHeader = buscarEncabezado(items[0], "Stock actual");
       const sugeridoHeader = buscarEncabezado(items[0], "Sugerido");
 
-      document.getElementById("lista").innerHTML = items.length === 0
-        ? '<p style="font-size:13px;color:var(--gris);">Sin datos de inventario todavía.</p>'
-        : items.map((it) => {
-            const campos = ["Óptimo", "Ajustado", "Crítico"].map((f) => {
-              const h = buscarEncabezado(it, f);
-              return editable
-                ? `<div><label style="margin-bottom:2px;">${f}</label><input type="number" value="${it[h]}" data-codigo="${it[codigoHeader]}" data-campo="${f.toLowerCase()}" class="inp-umbral umbral-input"></div>`
-                : `<div><label style="margin-bottom:2px;">${f}</label><span>${it[h]}</span></div>`;
-            }).join("");
-            return `
-              <div class="req-item">
-                <div class="fila">
-                  <span class="reqid" style="font-size:14px;">${it[refHeader]}</span>
-                  <span class="badge badge-${it["Estado"]}">${it["Estado"]}</span>
-                </div>
-                <p class="op">Stock: ${it[stockHeader]} ${mod.unitLabel} · Sugerido a pedir: ${it[sugeridoHeader]} ${mod.unitLabel}</p>
-                <div style="display:flex; gap:14px; margin-top:6px;">${campos}</div>
-              </div>`;
-          }).join("");
+      // Siempre se muestran TODOS los ítems del inventario del módulo (igual
+      // que "Ver inventario"), tengan o no algo sugerido a pedir — a los que
+      // no les hace falta nada se les marca "No hace falta" en vez de
+      // ocultarlos.
+      cont.innerHTML = items.map((it) => {
+        const codigo = codigoHeader ? (it[codigoHeader] || "") : "";
+        const empresaItem = moduloActivo.empresas.length > 1 ? (it["Empresa"] || "Ambas") : moduloActivo.empresas[0];
+        const sugerido = sugeridoHeader ? (Number(it[sugeridoHeader]) || 0) : 0;
+        const campos = ["Óptimo", "Ajustado", "Crítico"].map((f) => {
+          const h = buscarEncabezado(it, f);
+          if (!h) return "";
+          return editable
+            ? `<div class="u"><label>${f}</label><input type="number" value="${it[h]}" data-codigo="${codigo}" data-campo="${f.toLowerCase()}" class="inp-umbral umbral-input"></div>`
+            : `<div class="u">${f}<b>${it[h]}</b></div>`;
+        }).join("");
+        return `
+          <div class="req-item">
+            <div class="fila">
+              <div>
+                <div class="reqid">${it[refHeader]}</div>
+                <div class="codigo-item">${codigo}<span class="sep"> · ${moduloActivo.label} · ${empresaItem}</span></div>
+              </div>
+              <span class="badge badge-${claseEstado(it["Estado"])}">${it["Estado"]}</span>
+            </div>
+            <div class="stats-principales">
+              <div class="stat-principal stock">
+                <p class="l">Stock actual</p>
+                <p class="v">${it[stockHeader]} ${moduloActivo.unitLabel}</p>
+              </div>
+              <div class="stat-principal sugerido">
+                <p class="l">Sugerido a pedir</p>
+                <p class="v ${sugerido === 0 ? "cero" : ""}">${sugerido === 0 ? "No hace falta" : sugerido + " " + moduloActivo.unitLabel}</p>
+              </div>
+            </div>
+            <div class="umbrales-mini">${campos}</div>
+          </div>`;
+      }).join("");
 
-      document.querySelectorAll(".inp-umbral").forEach((inp) => {
-        inp.addEventListener("blur", async () => {
-          const body = { modulo: mod.key, codigo: inp.dataset.codigo };
-          body[inp.dataset.campo] = inp.value;
-          try { await apiPost("actualizarUmbrales", body); } catch (err) { alert(err.message); }
+      if (editable) {
+        document.querySelectorAll(".inp-umbral").forEach((inp) => {
+          inp.addEventListener("blur", async () => {
+            const body = { modulo: moduloActivo.key, codigo: inp.dataset.codigo };
+            body[inp.dataset.campo] = inp.value;
+            try { await apiPost("actualizarUmbrales", body); } catch (err) { alert(err.message); }
+          });
         });
-      });
+      }
     }
+
+    renderChipsModulo();
+    renderChipsEmpresa();
     cargar();
   }
+}
 </script>
 </body>
 </html>

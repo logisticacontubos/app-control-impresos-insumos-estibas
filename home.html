@@ -10,7 +10,9 @@
 <div class="app">
   <main style="padding-top:20px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-      <img id="logoEmpresa" src="assets/logo-contubos.png" alt="Contubos" style="height:22px;width:auto;object-fit:contain;">
+      <div id="logosEmpresa" style="display:flex;align-items:center;gap:10px;">
+        <img id="logoEmpresa" src="assets/logo-contubos.png" alt="Contubos" style="height:22px;width:auto;object-fit:contain;">
+      </div>
       <div style="display:flex;gap:8px;">
         <a href="#" onclick="window.location.reload();return false;" title="Actualizar"
            style="width:38px;height:38px;border-radius:11px;background:#fff;box-shadow:0 6px 18px rgba(26,26,26,0.18);display:flex;align-items:center;justify-content:center;color:var(--magenta);text-decoration:none;font-size:18px;">
@@ -36,6 +38,7 @@
 
     <p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Módulos</p>
     <div id="modulos"></div>
+    <div id="accionesExtra"></div>
 
     <div id="seccionPendientesGlobal" style="display:none;margin-top:8px;">
       <button class="accion" id="btnPendientesGlobal" style="text-align:left;">
@@ -52,8 +55,29 @@ const usuario = requiereSesion();
 
 function actualizarLogo(empresa) {
   const logo = document.getElementById("logoEmpresa");
+  if (!logo) return;
   if (empresa === "Tecnipapel") { logo.src = "assets/logo-tecnipapel.png"; logo.alt = "Tecnipapel"; }
   else { logo.src = "assets/logo-contubos.png"; logo.alt = "Contubos"; }
+}
+
+// El rol de Compras ya no "cambia de empresa" para trabajar — su Vista de
+// compras junta Impresos + Insumos + Materia Prima de las dos empresas en
+// una sola pantalla. Por eso, en vez del logo único que se alterna con el
+// chip Contubos/Tecnipapel (pensado para quien sí entra módulo por módulo
+// de una empresa a la vez), a este rol se le muestran los DOS logos juntos
+// apenas entra, para que quede claro que su vista no está "parada" en
+// ninguna de las dos.
+function renderLogosEmpresa() {
+  const cont = document.getElementById("logosEmpresa");
+  if (usuario.rol === "compras") {
+    cont.innerHTML = `
+      <img src="assets/logo-contubos.png" alt="Contubos" style="height:20px;width:auto;object-fit:contain;">
+      <img src="assets/logo-tecnipapel.png" alt="Tecnipapel" style="height:20px;width:auto;object-fit:contain;">
+    `;
+  } else {
+    cont.innerHTML = '<img id="logoEmpresa" src="assets/logo-contubos.png" alt="Contubos" style="height:22px;width:auto;object-fit:contain;">';
+    actualizarLogo(obtenerEmpresaActiva());
+  }
 }
 
 function renderSelectorEmpresa() {
@@ -83,7 +107,7 @@ function cambiarEmpresaActiva(empresa) {
 if (usuario) {
   if (esMultiEmpresa(usuario) && !obtenerEmpresaActiva()) establecerEmpresaActiva("Contubos");
   aplicarTema(obtenerEmpresaActiva());
-  actualizarLogo(obtenerEmpresaActiva());
+  renderLogosEmpresa();
   renderSelectorEmpresa();
 
   const primerNombre = (usuario.nombre || "").split(" ")[0];
@@ -111,6 +135,18 @@ if (usuario) {
       </a>`).join("");
   }
   renderModulos();
+
+  // Acceso directo a "Vista de compras" (Impresos + Insumos + Materia Prima
+  // juntos, sin tener que entrar primero a un módulo) para quien puede
+  // verla — ya no depende de la empresa activa en pantalla, por eso no se
+  // recalcula en renderModulos()/cambiarEmpresaActiva().
+  if (["compras", "bodega", "admin"].indexOf(usuario.rol) !== -1) {
+    document.getElementById("accionesExtra").innerHTML = `
+      <a class="accion" href="compras.html">
+        <span class="icono">&#128181;</span>
+        <span>Vista de compras<div class="sub">Impresos · Insumos · Materia Prima</div></span>
+      </a>`;
+  }
 
   // Resumen de pendientes de TODOS los módulos, directo en el inicio, para
   // CUALQUIER usuario (no solo quien entrega) — mostrando solo lo de la

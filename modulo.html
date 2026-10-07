@@ -62,7 +62,11 @@
     }
     html += `<a class="accion" href="historial.html?modulo=${mod.key}"><span class="icono">&#128337;</span>Historial de movimientos</a>`;
     if (usuario.rol === "compras" || usuario.rol === "bodega" || usuario.rol === "admin") {
-      html += `<a class="accion" href="compras.html?modulo=${mod.key}"><span class="icono">&#128181;</span>Vista de compras</a>`;
+      // Vista de compras ya no cuelga de este módulo específico — junta
+      // Impresos + Insumos + Materia Prima en una sola pantalla propia, por
+      // eso el link no lleva "?modulo=" (va siempre a la misma vista
+      // combinada, sin importar desde qué módulo se abra).
+      html += `<a class="accion" href="compras.html"><span class="icono">&#128181;</span>Vista de compras</a>`;
     }
     if (puedeVerReportes(usuario.rol)) {
       html += `<a class="accion" href="reporte.html?modulo=${mod.key}"><span class="icono">&#128202;</span>Reporte y KPI's</a>`;
