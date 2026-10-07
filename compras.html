@@ -5,14 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vista de compras · Control de Impresos - Insumos - Estibas</title>
 <link rel="stylesheet" href="css/styles.css">
+<style>
+  header.topbar > div.logos-dobles{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:auto;}
+  .logos-dobles img{height:20px;width:auto;object-fit:contain;}
+</style>
 </head>
 <body>
 <div class="app">
   <header class="topbar">
-    <a class="back" href="home.html">&#8592;</a>
+    <a class="back" id="backLink" href="home.html">&#8592;</a>
     <div>
       <h1>Vista de compras</h1>
       <p class="sub">Impresos · Insumos · Materia Prima</p>
+    </div>
+    <div class="logos-dobles">
+      <img src="assets/logo-contubos.png" alt="Contubos">
+      <img src="assets/logo-tecnipapel.png" alt="Tecnipapel">
     </div>
   </header>
   <main>
@@ -27,8 +35,9 @@ const usuario = requiereSesion();
 
 // Vista de compras: junta Impresos + Insumos + Materia Prima en una sola
 // pantalla, SIN necesidad de entrar a un módulo específico ni de cambiar de
-// empresa para ver "lo que tiene cada una" — a diferencia de las demás
-// pantallas, esta no depende de un "?modulo=" en la URL. Estibas queda
+// empresa para ver "lo que tiene cada una". Es de SOLO LECTURA — no permite
+// modificar nada del inventario ni de los umbrales (Óptimo/Ajustado/Crítico
+// se muestran como referencia, no como campos editables). Estibas queda
 // afuera a propósito: ese inventario todavía no está completo ni
 // funcionando (igual que en el resto de la app).
 const MODULOS_COMPRAS = ["impresos", "insumos", "materiaPrima"];
@@ -41,7 +50,13 @@ if (usuario) {
     mostrarBotonActualizar();
     mostrarBotonSalir();
 
-    const editable = puedeEditarUmbrales(usuario.rol);
+    // El rol de Compras entra directo a esta pantalla (home.html lo manda
+    // aquí apenas hace login) y no tiene otra pantalla de Inicio a la cual
+    // volver, así que no tiene sentido mostrarle la flecha de "atrás".
+    if (usuario.rol === "compras") {
+      document.getElementById("backLink").style.display = "none";
+    }
+
     // Solo los módulos a los que este usuario tiene acceso (un usuario de
     // "Ambas" empresas los ve los 3; uno de una sola empresa solo ve los que
     // le aplican, igual que en el resto de la app).
@@ -118,7 +133,8 @@ if (usuario) {
       // Siempre se muestran TODOS los ítems del inventario del módulo (igual
       // que "Ver inventario"), tengan o no algo sugerido a pedir — a los que
       // no les hace falta nada se les marca "No hace falta" en vez de
-      // ocultarlos.
+      // ocultarlos. Óptimo/Ajustado/Crítico van de solo lectura, como
+      // referencia chica — esta vista no modifica nada.
       cont.innerHTML = items.map((it) => {
         const codigo = codigoHeader ? (it[codigoHeader] || "") : "";
         const empresaItem = moduloActivo.empresas.length > 1 ? (it["Empresa"] || "Ambas") : moduloActivo.empresas[0];
@@ -126,9 +142,7 @@ if (usuario) {
         const campos = ["Óptimo", "Ajustado", "Crítico"].map((f) => {
           const h = buscarEncabezado(it, f);
           if (!h) return "";
-          return editable
-            ? `<div class="u"><label>${f}</label><input type="number" value="${it[h]}" data-codigo="${codigo}" data-campo="${f.toLowerCase()}" class="inp-umbral umbral-input"></div>`
-            : `<div class="u">${f}<b>${it[h]}</b></div>`;
+          return `<div class="u">${f}<b>${it[h]}</b></div>`;
         }).join("");
         return `
           <div class="req-item">
@@ -152,16 +166,6 @@ if (usuario) {
             <div class="umbrales-mini">${campos}</div>
           </div>`;
       }).join("");
-
-      if (editable) {
-        document.querySelectorAll(".inp-umbral").forEach((inp) => {
-          inp.addEventListener("blur", async () => {
-            const body = { modulo: moduloActivo.key, codigo: inp.dataset.codigo };
-            body[inp.dataset.campo] = inp.value;
-            try { await apiPost("actualizarUmbrales", body); } catch (err) { alert(err.message); }
-          });
-        });
-      }
     }
 
     renderChipsModulo();
