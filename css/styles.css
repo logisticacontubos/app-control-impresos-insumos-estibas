@@ -467,12 +467,18 @@ tr.fila-ajuste td{background:#FAEEDA !important;}
 .stats-principales{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 10px;}
 .stat-principal{border-radius:12px;padding:10px 12px;text-align:center;}
 .stat-principal.stock{background:var(--fondo);}
-.stat-principal.sugerido{background:var(--magenta-claro);}
 .stat-principal .l{font-size:9.5px;color:var(--gris);text-transform:uppercase;letter-spacing:.3px;margin:0 0 3px;font-weight:600;}
-.stat-principal.sugerido .l{color:#72243E;}
 .stat-principal .v{font-size:19px;font-weight:800;margin:0;}
-.stat-principal.sugerido .v{color:#72243E;}
-.stat-principal.sugerido .v.cero{color:var(--verde);font-size:14px;}
+/* El recuadro de "Sugerido a pedir" se pinta con el mismo color del
+   criterio (Óptimo/Ajustado/Crítico/Cero) del ítem, para que de un vistazo
+   se note qué tan urgente es, sin tener que leer la insignia de arriba. */
+.stat-principal.sugerido.sug-critico{background:var(--rojo-fondo);}
+.stat-principal.sugerido.sug-critico .l,.stat-principal.sugerido.sug-critico .v{color:var(--rojo);}
+.stat-principal.sugerido.sug-ajustado{background:var(--ambar-fondo);}
+.stat-principal.sugerido.sug-ajustado .l,.stat-principal.sugerido.sug-ajustado .v{color:var(--ambar);}
+.stat-principal.sugerido.sug-optimo{background:var(--verde-fondo);}
+.stat-principal.sugerido.sug-optimo .l,.stat-principal.sugerido.sug-optimo .v{color:var(--verde);}
+.stat-principal.sugerido .v.cero{font-size:14px;}
 .umbrales-mini{display:flex;gap:16px;padding-top:8px;border-top:1px solid var(--borde);flex-wrap:wrap;}
 .umbrales-mini .u{font-size:10.5px;color:var(--gris);}
 .umbrales-mini .u b{display:block;font-size:12px;color:var(--texto);font-weight:600;}
