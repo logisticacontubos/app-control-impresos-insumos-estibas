@@ -28,8 +28,8 @@
          KPI's, pero con los dos logos porque esta vista junta las dos
          empresas. Solo se ve al imprimir/exportar, nunca en pantalla. -->
     <div class="encabezado-pdf solo-impresion">
-      <img src="assets/logo-contubos.png" alt="Contubos" style="height:30px;">
-      <img src="assets/logo-tecnipapel.png" alt="Tecnipapel" style="height:30px;margin-left:-10px;">
+      <img id="logoPdfContubos" src="assets/logo-contubos.png" alt="Contubos" style="height:30px;">
+      <img id="logoPdfTecnipapel" src="assets/logo-tecnipapel.png" alt="Tecnipapel" style="height:30px;margin-left:-10px;">
       <div class="txt">
         <h2>Reporte · Vista de compras</h2>
         <p id="subPdf"></p>
@@ -184,6 +184,14 @@ if (usuario) {
       document.getElementById("subPdf").textContent =
         moduloActivo.label + " · " + (empresaActiva === "todos" ? "Todas las empresas" : empresaActiva) +
         " · generado " + fechaHoy() + " " + horaActual();
+      // El encabezado del reporte trae el logo de la empresa que de verdad
+      // está filtrada: si el reporte es solo de Contubos o solo de
+      // Tecnipapel, sale un único logo (no tiene sentido poner los dos si el
+      // reporte no trae nada de la otra); si es de las dos empresas juntas
+      // (o el módulo es de una sola, como Impresos/Materia Prima), salen
+      // ambos o el que corresponda.
+      document.getElementById("logoPdfContubos").style.display = empresaActiva === "Tecnipapel" ? "none" : "";
+      document.getElementById("logoPdfTecnipapel").style.display = empresaActiva === "Contubos" ? "none" : "";
       document.getElementById("piePdf").textContent =
         "Generado por " + usuario.nombre + " (" + (usuario.cargo || usuario.rol) + ") · " + fechaHoy() + " " + horaActual() + " · " + window.location.hostname;
 
