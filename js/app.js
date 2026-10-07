@@ -154,11 +154,23 @@ function ocultarCargando() {
 // petición GET (leer datos) es seguro, pero reintentar un POST (crear/
 // entregar/devolver) podría duplicar la operación si la primera sí se
 // guardó, aquí solo se reintenta automáticamente cuando es seguro hacerlo.
-async function fetchConReintento(hacerFetch, reintentos) {
+//
+// Además de fallar, a veces ese mismo problema hace que el intento se quede
+// "colgado" muchos segundos (10, 15, más) antes de que Google por fin
+// devuelva el error — y como antes no había límite de tiempo, la app se
+// quedaba esperando ese cuelgue completo en cada intento fallido, sumando
+// un montón de tiempo muerto antes de llegar al reintento que sí funciona.
+// Por eso cada intento tiene ahora su propio límite (tiempoLimiteMs): si se
+// pasa, se corta solo (AbortController) y se pasa de una vez al siguiente
+// intento, en vez de seguir esperando.
+async function fetchConReintento(crearFetch, reintentos, tiempoLimiteMs) {
+  const limite = tiempoLimiteMs || 8000;
   let ultimoError;
   for (let intento = 0; intento <= reintentos; intento++) {
+    const controlador = new AbortController();
+    const timer = setTimeout(() => controlador.abort(), limite);
     try {
-      const resp = await hacerFetch();
+      const resp = await crearFetch(controlador.signal);
       const texto = await resp.text();
       let json;
       try {
@@ -169,8 +181,12 @@ async function fetchConReintento(hacerFetch, reintentos) {
       if (!json.ok) throw new Error(json.error || "Error desconocido");
       return json.data;
     } catch (e) {
-      ultimoError = e;
+      ultimoError = e && e.name === "AbortError"
+        ? new Error("La respuesta de Google se demoró demasiado (intenta de nuevo en unos segundos).")
+        : e;
       if (intento < reintentos) await new Promise((r) => setTimeout(r, 900));
+    } finally {
+      clearTimeout(timer);
     }
   }
   throw ultimoError;
@@ -191,10 +207,11 @@ async function apiPost(accion, datos, opts) {
     // ahí, es seguro reintentarlo solo en vez de que la persona piense que
     // escribió mal su PIN.
     const reintentos = accion === "login" ? 2 : 0;
-    const resultado = await fetchConReintento(() => fetch(API_URL, {
+    const resultado = await fetchConReintento((signal) => fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(body),
+      signal: signal,
     }), reintentos);
     // El backend marca "duplicadoEvitado" cuando reconoce que esta misma
     // acción (misma "idempotencia") ya se había procesado antes — por
@@ -223,7 +240,7 @@ async function apiGet(accion, params, opts) {
     // de repetir porque no cambian nada, así que si el primer intento choca
     // con el problema intermitente de Google, el segundo o tercero casi
     // siempre funciona sin que el usuario note nada.
-    return await fetchConReintento(() => fetch(API_URL + "?" + qs.toString()), 2);
+    return await fetchConReintento((signal) => fetch(API_URL + "?" + qs.toString(), { signal: signal }), 2);
   } finally {
     if (!silencioso) ocultarCargando();
   }
