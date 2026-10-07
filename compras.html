@@ -12,7 +12,7 @@
 </head>
 <body>
 <div class="app">
-  <header class="topbar">
+  <header class="topbar no-imprimir">
     <a class="back" id="backLink" href="home.html">&#8592;</a>
     <div>
       <h1>Vista de compras</h1>
@@ -24,11 +24,54 @@
     </div>
   </header>
   <main>
-    <div class="chip-row" id="chipsModulo"></div>
-    <div class="chip-row" id="chipsEmpresa" style="display:none;"></div>
-    <div id="lista"></div>
+    <!-- Encabezado propio del reporte (Excel/PDF) — igual al de Reporte y
+         KPI's, pero con los dos logos porque esta vista junta las dos
+         empresas. Solo se ve al imprimir/exportar, nunca en pantalla. -->
+    <div class="encabezado-pdf solo-impresion">
+      <img src="assets/logo-contubos.png" alt="Contubos" style="height:30px;">
+      <img src="assets/logo-tecnipapel.png" alt="Tecnipapel" style="height:30px;margin-left:-10px;">
+      <div class="txt">
+        <h2>Reporte · Vista de compras</h2>
+        <p id="subPdf"></p>
+      </div>
+    </div>
+
+    <div class="chip-row no-imprimir" id="chipsModulo"></div>
+    <div class="chip-row no-imprimir" id="chipsEmpresa" style="display:none;"></div>
+
+    <div class="btn-row no-imprimir" style="margin-bottom:14px;">
+      <button class="btn btn-secondary" id="btnExcel">Descargar Excel</button>
+      <button class="btn btn-secondary" id="btnPdf">Descargar PDF</button>
+    </div>
+
+    <div id="lista" class="no-imprimir"></div>
+
+    <!-- Tabla de solo-impresión: el reporte trae SIEMPRE el filtro que esté
+         activo en pantalla (el módulo y la empresa elegidos con los chips de
+         arriba) — es "el reporte actual", no todo el inventario completo. -->
+    <div class="solo-impresion" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr style="text-align:left;">
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Código</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Referencia</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Empresa</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Estado</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Stock actual</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Sugerido a pedir</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Óptimo</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Ajustado</th>
+            <th style="padding:6px 7px;border:1px solid var(--borde);">Crítico</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyImpresion"></tbody>
+      </table>
+    </div>
+
+    <div class="pie-pdf solo-impresion" id="piePdf"></div>
   </main>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/app.js"></script>
 <script>
 const usuario = requiereSesion();
@@ -119,6 +162,13 @@ if (usuario) {
       cargar();
     };
 
+    // Datos del último "cargar()" — los usan tanto la tabla de impresión como
+    // los botones de Excel/PDF, para que el reporte sea siempre justo lo que
+    // está viendo compras en pantalla en ese momento (el módulo y la empresa
+    // elegidos con los chips), no todo el inventario completo.
+    let ultimosItems = [];
+    let ultimoUnitLabel = "";
+
     async function cargar() {
       const cont = document.getElementById("lista");
       cont.innerHTML = '<p class="loading">Cargando...</p>';
@@ -129,9 +179,19 @@ if (usuario) {
       // filtro de empresa, independiente de eso.
       const data = await apiGet("getInventario", { modulo: moduloActivo.key, empresa: empresaParam });
       const items = data.items || [];
+      ultimoUnitLabel = moduloActivo.unitLabel;
+
+      document.getElementById("subPdf").textContent =
+        moduloActivo.label + " · " + (empresaActiva === "todos" ? "Todas las empresas" : empresaActiva) +
+        " · generado " + fechaHoy() + " " + horaActual();
+      document.getElementById("piePdf").textContent =
+        "Generado por " + usuario.nombre + " (" + (usuario.cargo || usuario.rol) + ") · " + fechaHoy() + " " + horaActual() + " · " + window.location.hostname;
 
       if (items.length === 0) {
         cont.innerHTML = '<p style="font-size:13px;color:var(--gris);text-align:center;padding:24px 0;">No hay ítems en este filtro.</p>';
+        document.getElementById("tbodyImpresion").innerHTML =
+          `<tr><td colspan="9" style="padding:10px;border:1px solid var(--borde);color:var(--gris);">No hay ítems en este filtro.</td></tr>`;
+        ultimosItems = [];
         return;
       }
 
@@ -149,38 +209,81 @@ if (usuario) {
       // no les hace falta nada se les marca "No hace falta" en vez de
       // ocultarlos. Óptimo/Ajustado/Crítico van de solo lectura, como
       // referencia chica — esta vista no modifica nada.
-      cont.innerHTML = itemsOrdenados.map((it) => {
-        const codigo = codigoHeader ? (it[codigoHeader] || "") : "";
-        const empresaItem = moduloActivo.empresas.length > 1 ? (it["Empresa"] || "Ambas") : moduloActivo.empresas[0];
-        const sugerido = sugeridoHeader ? (Number(it[sugeridoHeader]) || 0) : 0;
-        const campos = ["Óptimo", "Ajustado", "Crítico"].map((f) => {
-          const h = buscarEncabezado(it, f);
-          if (!h) return "";
-          return `<div class="u">${f}<b>${it[h]}</b></div>`;
-        }).join("");
-        return `
+      ultimosItems = itemsOrdenados.map((it) => {
+        const h = (f) => buscarEncabezado(it, f);
+        return {
+          codigo: codigoHeader ? (it[codigoHeader] || "") : "",
+          referencia: it[refHeader],
+          empresa: moduloActivo.empresas.length > 1 ? (it["Empresa"] || "Ambas") : moduloActivo.empresas[0],
+          estado: it["Estado"],
+          stock: it[stockHeader],
+          sugerido: sugeridoHeader ? (Number(it[sugeridoHeader]) || 0) : 0,
+          optimo: h("Óptimo") ? it[h("Óptimo")] : "",
+          ajustado: h("Ajustado") ? it[h("Ajustado")] : "",
+          critico: h("Crítico") ? it[h("Crítico")] : "",
+        };
+      });
+
+      cont.innerHTML = ultimosItems.map((it) => `
           <div class="req-item">
             <div class="fila">
               <div>
-                <div class="reqid">${it[refHeader]}</div>
-                <div class="codigo-item">${codigo}<span class="sep"> · ${moduloActivo.label} · ${empresaItem}</span></div>
+                <div class="reqid">${it.referencia}</div>
+                <div class="codigo-item">${it.codigo}<span class="sep"> · ${moduloActivo.label} · ${it.empresa}</span></div>
               </div>
-              <span class="badge badge-${claseEstado(it["Estado"])}">${it["Estado"]}</span>
+              <span class="badge badge-${claseEstado(it.estado)}">${it.estado}</span>
             </div>
             <div class="stats-principales">
               <div class="stat-principal stock">
                 <p class="l">Stock actual</p>
-                <p class="v">${it[stockHeader]} ${moduloActivo.unitLabel}</p>
+                <p class="v">${it.stock} ${moduloActivo.unitLabel}</p>
               </div>
-              <div class="stat-principal sugerido ${claseSugerido(it["Estado"])}">
+              <div class="stat-principal sugerido ${claseSugerido(it.estado)}">
                 <p class="l">Sugerido a pedir</p>
-                <p class="v ${sugerido === 0 ? "cero" : ""}">${sugerido === 0 ? "No hace falta" : sugerido + " " + moduloActivo.unitLabel}</p>
+                <p class="v ${it.sugerido === 0 ? "cero" : ""}">${it.sugerido === 0 ? "No hace falta" : it.sugerido + " " + moduloActivo.unitLabel}</p>
               </div>
             </div>
-            <div class="umbrales-mini">${campos}</div>
-          </div>`;
+            <div class="umbrales-mini">
+              <div class="u">Óptimo<b>${it.optimo}</b></div>
+              <div class="u">Ajustado<b>${it.ajustado}</b></div>
+              <div class="u">Crítico<b>${it.critico}</b></div>
+            </div>
+          </div>`).join("");
+
+      const celda = (v) => `<td style="padding:6px 7px;border:1px solid var(--borde);">${v}</td>`;
+      document.getElementById("tbodyImpresion").innerHTML = ultimosItems.map((it) => {
+        const fondo = it.estado === "Crítico" || it.estado === "Cero" ? "var(--rojo-fondo)"
+          : it.estado === "Ajustado" ? "var(--ambar-fondo)" : "var(--verde-fondo)";
+        const color = it.estado === "Crítico" || it.estado === "Cero" ? "var(--rojo)"
+          : it.estado === "Ajustado" ? "var(--ambar)" : "var(--verde)";
+        const textoSugerido = it.sugerido === 0 ? "No hace falta" : it.sugerido + " " + moduloActivo.unitLabel;
+        return "<tr>" +
+          celda(it.codigo) + celda(it.referencia) + celda(it.empresa) + celda(it.estado) +
+          celda(it.stock + " " + moduloActivo.unitLabel) +
+          `<td style="padding:6px 7px;border:1px solid var(--borde);background:${fondo};color:${color};font-weight:700;">${textoSugerido}</td>` +
+          celda(it.optimo) + celda(it.ajustado) + celda(it.critico) + "</tr>";
       }).join("");
     }
+
+    document.getElementById("btnExcel").addEventListener("click", () => {
+      if (ultimosItems.length === 0) return;
+      const wb = XLSX.utils.book_new();
+      const filas = [
+        ["Reporte · Vista de compras", moduloActivo.label, empresaActiva === "todos" ? "Todas las empresas" : empresaActiva, fechaHoy()],
+        [],
+        ["Código", "Referencia", "Empresa", "Estado", "Stock actual", "Sugerido a pedir", "Óptimo", "Ajustado", "Crítico"],
+        ...ultimosItems.map((it) => [
+          it.codigo, it.referencia, it.empresa, it.estado,
+          it.stock + " " + ultimoUnitLabel,
+          it.sugerido === 0 ? "No hace falta" : it.sugerido + " " + ultimoUnitLabel,
+          it.optimo, it.ajustado, it.critico,
+        ]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filas), "Compras");
+      XLSX.writeFile(wb, `Vista_de_compras_${moduloActivo.key}_${fechaHoy()}.xlsx`);
+    });
+
+    document.getElementById("btnPdf").addEventListener("click", () => window.print());
 
     renderChipsModulo();
     renderChipsEmpresa();
