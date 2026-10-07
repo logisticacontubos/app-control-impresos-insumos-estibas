@@ -42,6 +42,16 @@ const usuario = requiereSesion();
 // funcionando (igual que en el resto de la app).
 const MODULOS_COMPRAS = ["impresos", "insumos", "materiaPrima"];
 
+// Más crítico arriba, más óptimo abajo — así lo primero que ve compras es
+// lo más urgente, sin tener que leer tarjeta por tarjeta. "Cero" (stock
+// actual en cero) va primero de todos, antes que Crítico.
+const ORDEN_CRITICIDAD = { "Cero": 0, "Crítico": 1, "Ajustado": 2, "Óptimo": 3 };
+function claseSugerido(estado) {
+  if (estado === "Crítico" || estado === "Cero") return "sug-critico";
+  if (estado === "Ajustado") return "sug-ajustado";
+  return "sug-optimo";
+}
+
 if (usuario) {
   if (["compras", "bodega", "admin"].indexOf(usuario.rol) === -1) {
     window.location.href = "home.html";
@@ -130,12 +140,16 @@ if (usuario) {
       const stockHeader = buscarEncabezado(items[0], "Stock actual");
       const sugeridoHeader = buscarEncabezado(items[0], "Sugerido");
 
+      const itemsOrdenados = items.slice().sort((a, b) =>
+        (ORDEN_CRITICIDAD[a["Estado"]] ?? 2) - (ORDEN_CRITICIDAD[b["Estado"]] ?? 2)
+      );
+
       // Siempre se muestran TODOS los ítems del inventario del módulo (igual
       // que "Ver inventario"), tengan o no algo sugerido a pedir — a los que
       // no les hace falta nada se les marca "No hace falta" en vez de
       // ocultarlos. Óptimo/Ajustado/Crítico van de solo lectura, como
       // referencia chica — esta vista no modifica nada.
-      cont.innerHTML = items.map((it) => {
+      cont.innerHTML = itemsOrdenados.map((it) => {
         const codigo = codigoHeader ? (it[codigoHeader] || "") : "";
         const empresaItem = moduloActivo.empresas.length > 1 ? (it["Empresa"] || "Ambas") : moduloActivo.empresas[0];
         const sugerido = sugeridoHeader ? (Number(it[sugeridoHeader]) || 0) : 0;
@@ -158,7 +172,7 @@ if (usuario) {
                 <p class="l">Stock actual</p>
                 <p class="v">${it[stockHeader]} ${moduloActivo.unitLabel}</p>
               </div>
-              <div class="stat-principal sugerido">
+              <div class="stat-principal sugerido ${claseSugerido(it["Estado"])}">
                 <p class="l">Sugerido a pedir</p>
                 <p class="v ${sugerido === 0 ? "cero" : ""}">${sugerido === 0 ? "No hace falta" : sugerido + " " + moduloActivo.unitLabel}</p>
               </div>
