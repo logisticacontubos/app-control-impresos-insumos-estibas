@@ -60,11 +60,13 @@
     if (puedeIngresarStock(usuario.rol)) {
       html += `<a class="accion" href="ingresar-stock.html?modulo=${mod.key}"><span class="icono">&#128230;</span>Ingresar stock</a>`;
     }
-    if (mod.key === "insumos" && puedeIngresarStock(usuario.rol)) {
-      // Solo en Insumos: para cuando Contubos/Tecnipapel mismos (no
-      // producción) usan un insumo — limpieza, mantenimiento, pruebas,
-      // daño o pérdida — y hay que descontar el stock sin pasar por el
-      // flujo de requisición → entrega.
+    if (mod.key === "insumos" && esAreaLogistica(usuario)) {
+      // Solo en Insumos y solo para el ÁREA de Logística (no por el "rol"
+      // normalizado, que mete a Supervisor de inventarios en "admin" aunque
+      // sea del área de Logística) — ni producción, ni compras, ni otras
+      // áreas: es para cuando el equipo de logística mismo usa un insumo —
+      // limpieza, mantenimiento, pruebas, daño o pérdida — y hay que
+      // descontar el stock sin pasar por el flujo de requisición → entrega.
       html += `<a class="accion" href="registrar-consumo.html?modulo=${mod.key}"><span class="icono">&#9986;</span>Registrar consumo interno</a>`;
     }
     html += `<a class="accion" href="historial.html?modulo=${mod.key}"><span class="icono">&#128337;</span>Historial de movimientos</a>`;

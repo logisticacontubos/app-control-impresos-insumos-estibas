@@ -77,6 +77,14 @@ function puedeEditarUmbrales(rol) { return rol === "compras" || rol === "admin";
 // Ingresar mercancía nueva al inventario: Jefe de Logística (rol "bodega") y
 // Supervisor de Inventarios (rol "admin").
 function puedeIngresarStock(rol) { return rol === "bodega" || rol === "admin"; }
+// Área real de la persona (columna "Area" de Usuarios, p. ej. "Logistica",
+// "Produccion", "Compras"), que llega al frontend como usuario.cargo — más
+// precisa que el "rol" normalizado para casos como "Registrar consumo
+// interno", que debe verse para TODA el área de Logística (incluido
+// Supervisor de inventarios, que el rol normalizado clasifica como "admin").
+function esAreaLogistica(usuario) {
+  return (usuario.cargo || "").toString().trim().toLowerCase().indexOf("log") !== -1;
+}
 // Registrar corte de inventario (conteo físico manual): mismos roles que
 // pueden ingresar stock, porque es la misma responsabilidad de bodega —
 // mantener el inventario físico al día en el sistema.

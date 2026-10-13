@@ -58,7 +58,7 @@
     document.getElementById("titulo").textContent = "Registrar consumo interno";
     document.getElementById("sub").textContent = mod.label;
 
-    if (!puedeIngresarStock(usuario.rol)) {
+    if (!esAreaLogistica(usuario)) {
       document.querySelector("main").innerHTML = '<p style="font-size:13px;color:var(--gris);margin-top:20px;">No tienes permiso para registrar consumos internos en este módulo.</p>';
     } else {
       let itemsInv = [];
