@@ -112,10 +112,12 @@
       const inpBuscar = document.getElementById("buscarInsumo");
       const contResultados = document.getElementById("resultados");
 
-      inpBuscar.addEventListener("input", () => {
-        const q = inpBuscar.value.trim().toLowerCase();
-        if (!q) { contResultados.style.display = "none"; return; }
-        const encontrados = itemsInv.filter((it) =>
+      // Al escribir filtra por nombre o código; al enfocar el campo (sin
+      // haber escrito nada todavía) muestra de una vez TODOS los insumos de
+      // la empresa activa, como si fuera una lista desplegable — así no hace
+      // falta ya saber el nombre exacto para encontrar el ítem.
+      function mostrarResultados(q) {
+        const encontrados = !q ? itemsInv : itemsInv.filter((it) =>
           String(it[refHeader] || "").toLowerCase().includes(q) ||
           String(it[codigoHeader] || "").toLowerCase().includes(q));
         if (encontrados.length === 0) {
@@ -128,6 +130,16 @@
             </div>`).join("");
         }
         contResultados.style.display = "block";
+      }
+
+      inpBuscar.addEventListener("input", () => {
+        mostrarResultados(inpBuscar.value.trim().toLowerCase());
+      });
+      inpBuscar.addEventListener("focus", () => {
+        mostrarResultados(inpBuscar.value.trim().toLowerCase());
+      });
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".buscador")) contResultados.style.display = "none";
       });
 
       contResultados.addEventListener("click", (e) => {
