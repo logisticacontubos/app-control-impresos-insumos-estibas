@@ -20,12 +20,8 @@
     <div class="error-msg" id="errorMsg"></div>
 
     <div class="card">
-      <label for="buscarInsumo">Insumo</label>
-      <div class="buscador">
-        <input type="text" id="buscarInsumo" placeholder="Buscar por nombre o código..." autocomplete="off" style="margin-bottom:0;">
-        <div class="resultados" id="resultados" style="display:none;"></div>
-      </div>
-      <div id="itemElegido"></div>
+      <label for="selItem">Insumo</label>
+      <select id="selItem"></select>
 
       <div id="bloqueCantidad" style="display:none;">
         <label for="inpCantidad">Cantidad consumida</label>
@@ -82,7 +78,9 @@
       async function cargarItems() {
         // Filtrado por empresa activa, igual que en Ingresar stock / Nueva
         // requisición: en Insumos no se debe mezclar el inventario de
-        // Contubos y Tecnipapel en este buscador.
+        // Contubos y Tecnipapel en este selector. Son pocos ítems por
+        // empresa, así que un <select> simple (sin buscador) es suficiente
+        // para elegir directo.
         const invData = await apiGet("getInventario", { modulo: mod.key, empresa: empresaActual });
         itemsInv = invData.items || [];
         if (itemsInv[0]) {
@@ -90,6 +88,10 @@
           refHeader = buscarEncabezado(itemsInv[0], "Referencia");
           stockHeader = buscarEncabezado(itemsInv[0], "Stock actual");
         }
+        const sel = document.getElementById("selItem");
+        sel.innerHTML = '<option value="">Selecciona…</option>' + itemsInv.map((it, i) =>
+          `<option value="${i}">${it[refHeader]} (${it[codigoHeader]})</option>`).join("");
+        quitarItem();
       }
 
       async function cargarRecientes() {
@@ -109,65 +111,21 @@
               </div>`).join("");
       }
 
-      const inpBuscar = document.getElementById("buscarInsumo");
-      const contResultados = document.getElementById("resultados");
-
-      // Al escribir filtra por nombre o código; al enfocar el campo (sin
-      // haber escrito nada todavía) muestra de una vez TODOS los insumos de
-      // la empresa activa, como si fuera una lista desplegable — así no hace
-      // falta ya saber el nombre exacto para encontrar el ítem.
-      function mostrarResultados(q) {
-        const encontrados = !q ? itemsInv : itemsInv.filter((it) =>
-          String(it[refHeader] || "").toLowerCase().includes(q) ||
-          String(it[codigoHeader] || "").toLowerCase().includes(q));
-        if (encontrados.length === 0) {
-          contResultados.innerHTML = '<div class="resultado-item" style="color:var(--gris);cursor:default;">Sin resultados</div>';
-        } else {
-          contResultados.innerHTML = encontrados.map((it) => `
-            <div class="resultado-item" data-idx="${itemsInv.indexOf(it)}">
-              <div class="ref">${it[refHeader]}</div>
-              <div class="meta">${it[codigoHeader]} · stock actual ${it[stockHeader]} ${mod.unitLabel}</div>
-            </div>`).join("");
-        }
-        contResultados.style.display = "block";
-      }
-
-      inpBuscar.addEventListener("input", () => {
-        mostrarResultados(inpBuscar.value.trim().toLowerCase());
-      });
-      inpBuscar.addEventListener("focus", () => {
-        mostrarResultados(inpBuscar.value.trim().toLowerCase());
-      });
-      document.addEventListener("click", (e) => {
-        if (!e.target.closest(".buscador")) contResultados.style.display = "none";
-      });
-
-      contResultados.addEventListener("click", (e) => {
-        const fila = e.target.closest(".resultado-item[data-idx]");
-        if (!fila) return;
-        elegirItem(itemsInv[Number(fila.dataset.idx)]);
+      document.getElementById("selItem").addEventListener("change", (e) => {
+        const idx = e.target.value;
+        if (idx === "") { quitarItem(); return; }
+        elegirItem(itemsInv[Number(idx)]);
       });
 
       function elegirItem(it) {
         itemElegido = it;
-        inpBuscar.value = "";
-        contResultados.style.display = "none";
-        document.getElementById("itemElegido").innerHTML = `
-          <div class="item-elegido">
-            <div>
-              <div class="ref">${it[refHeader]}</div>
-              <div class="meta">${it[codigoHeader]} · stock actual ${it[stockHeader]} ${mod.unitLabel}</div>
-            </div>
-            <button type="button" class="quitar" id="btnQuitar">Quitar</button>
-          </div>`;
         document.getElementById("bloqueCantidad").style.display = "block";
         document.getElementById("inpCantidad").value = "";
-        document.getElementById("itemElegido").querySelector("#btnQuitar").addEventListener("click", quitarItem);
         actualizarPreview();
       }
       function quitarItem() {
         itemElegido = null;
-        document.getElementById("itemElegido").innerHTML = "";
+        document.getElementById("selItem").value = "";
         document.getElementById("bloqueCantidad").style.display = "none";
       }
 
