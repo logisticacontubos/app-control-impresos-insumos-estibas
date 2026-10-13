@@ -102,7 +102,9 @@
           return String(r.ID || "").toLowerCase().includes(f) ||
             String(r["Referencia"] || "").toLowerCase().includes(f) ||
             String(r["Solicitó"] || "").toLowerCase().includes(f) ||
-            String(r["Ingresó"] || "").toLowerCase().includes(f);
+            String(r["Ingresó"] || "").toLowerCase().includes(f) ||
+            String(r["Registró"] || "").toLowerCase().includes(f) ||
+            String(r["Razón"] || "").toLowerCase().includes(f);
         });
       }
 
@@ -120,6 +122,18 @@
                   <p class="op" style="font-weight:600;">${r["Referencia"] || r["Código"]}</p>
                   <p class="op">Ingresó ${r["Ingresó"]} · ${r["Fecha"]} ${r["Hora"] || ""}</p>
                   ${r["Observación"] ? `<p class="op">${r["Observación"]}</p>` : ""}
+                </div>`;
+            }
+            if (x.tipo === "consumo") {
+              return `
+                <div class="req-item">
+                  <div class="fila">
+                    <span class="reqid">${r.ID}</span>
+                    <span class="badge badge-Crítico">Consumo interno · -${r["Cantidad"]} ${mod.unitLabel}${r["Empresa"] ? " · " + r["Empresa"] : ""}</span>
+                  </div>
+                  <p class="op" style="font-weight:600;">${r["Referencia"] || r["Código"]}</p>
+                  <p class="op">Registró ${r["Registró"]} · ${r["Fecha"]} ${r["Hora"] || ""} · ${r["Razón"]}</p>
+                  ${r["Detalle"] ? `<p class="op">${r["Detalle"]}</p>` : ""}
                 </div>`;
             }
             return `
@@ -152,7 +166,12 @@
         clave: String(r["Fecha"] || "") + " " + String(r["Hora"] || ""),
         datos: r,
       }));
-      todas = reqs.concat(ingresos).sort((a, b) => b.clave.localeCompare(a.clave));
+      const consumos = (datos.consumosInternos || []).map((r) => ({
+        tipo: "consumo",
+        clave: String(r["Fecha"] || "") + " " + String(r["Hora"] || ""),
+        datos: r,
+      }));
+      todas = reqs.concat(ingresos).concat(consumos).sort((a, b) => b.clave.localeCompare(a.clave));
       render(document.getElementById("buscador").value);
     }
 

@@ -134,6 +134,7 @@
       salida: { texto: "Entrega", signo: "-", color: "var(--magenta)" },
       devolucion: { texto: "Devolución", signo: "+", color: "var(--verde)" },
       corte: { texto: "Corte de inventario", signo: "", color: "var(--gris)" },
+      consumo: { texto: "Consumo interno", signo: "-", color: "var(--ambar)" },
     };
 
     function redondear2(n) {
@@ -151,12 +152,12 @@
         const primero = cron[0];
         if (primero.tipo === "corte") inicial = primero.cantidadSistema;
         else if (primero.tipo === "ingreso" || primero.tipo === "devolucion") inicial = redondear2(primero.saldo - primero.cantidad);
-        else if (primero.tipo === "salida") inicial = redondear2(primero.saldo + primero.cantidad);
+        else if (primero.tipo === "salida" || primero.tipo === "consumo") inicial = redondear2(primero.saldo + primero.cantidad);
       }
       let totalEntradas = 0, totalSalidas = 0, ajustes = 0;
       cron.forEach((m) => {
         if (m.tipo === "ingreso" || m.tipo === "devolucion") totalEntradas = redondear2(totalEntradas + m.cantidad);
-        else if (m.tipo === "salida") totalSalidas = redondear2(totalSalidas + m.cantidad);
+        else if (m.tipo === "salida" || m.tipo === "consumo") totalSalidas = redondear2(totalSalidas + m.cantidad);
         else if (m.tipo === "corte") ajustes = redondear2(ajustes + m.diferencia);
       });
       const final = cron.length > 0 ? cron[cron.length - 1].saldo : inicial;
@@ -177,7 +178,9 @@
                 ? "Entregó " + (m.quien || "-") + " a " + (m.aQuien || "-")
                 : m.tipo === "devolucion"
                   ? "Devolvió " + (m.quien || "-") + (m.aQuien ? " · recibió " + m.aQuien : "")
-                  : "Registró " + (m.quien || "-");
+                  : m.tipo === "consumo"
+                    ? "Registró " + (m.quien || "-") + (m.razon ? " · " + m.razon : "")
+                    : "Registró " + (m.quien || "-");
             const cantidadTxt = m.tipo === "corte"
               ? "Contado: " + m.cantidad + " " + mod.unitLabel + (m.diferencia ? " (dif. " + (m.diferencia > 0 ? "+" : "") + m.diferencia + ")" : "")
               : et.signo + m.cantidad + " " + mod.unitLabel;
@@ -218,10 +221,12 @@
             const quienTxt = m.quien || "-";
             const aQuienTxt = m.tipo === "salida" ? (m.aQuien || "-") : m.tipo === "devolucion" ? (m.aQuien || "-") : "-";
             const entradaTxt = (m.tipo === "ingreso" || m.tipo === "devolucion") ? (m.cantidad + " " + unit) : "-";
-            const salidaTxt = m.tipo === "salida" ? (m.cantidad + " " + unit) : "-";
+            const salidaTxt = (m.tipo === "salida" || m.tipo === "consumo") ? (m.cantidad + " " + unit) : "-";
             const comentario = m.tipo === "corte"
               ? "Corte" + (m.diferencia ? " · dif. " + (m.diferencia > 0 ? "+" : "") + m.diferencia : "") + (m.detalle ? " · " + m.detalle : "")
-              : (m.detalle || "-");
+              : m.tipo === "consumo"
+                ? (m.razon || "-") + (m.detalle ? " · " + m.detalle : "")
+                : (m.detalle || "-");
             const claseFila = m.tipo === "corte" && m.diferencia ? ' class="fila-ajuste"' : "";
             return `<tr${claseFila}>` +
               celda((m.fecha || "") + (m.hora ? " " + m.hora : "")) + celda(et.texto) + celda(m.id || "") +
@@ -285,10 +290,12 @@
           const et = ETIQUETAS[m.tipo];
           const aQuienTxt = m.tipo === "salida" || m.tipo === "devolucion" ? (m.aQuien || "") : "";
           const entrada = (m.tipo === "ingreso" || m.tipo === "devolucion") ? m.cantidad : "";
-          const salida = m.tipo === "salida" ? m.cantidad : "";
+          const salida = (m.tipo === "salida" || m.tipo === "consumo") ? m.cantidad : "";
           const comentario = m.tipo === "corte"
             ? "Corte" + (m.diferencia ? " · dif. " + (m.diferencia > 0 ? "+" : "") + m.diferencia : "") + (m.detalle ? " · " + m.detalle : "")
-            : (m.detalle || "");
+            : m.tipo === "consumo"
+              ? (m.razon || "") + (m.detalle ? " · " + m.detalle : "")
+              : (m.detalle || "");
           return [et.texto, m.id || "", m.fecha || "", m.hora || "", entrada, salida, m.saldo !== undefined ? m.saldo : "", m.quien || "", aQuienTxt, comentario];
         }),
       ];

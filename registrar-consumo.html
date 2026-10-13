@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registrar consumo interno · Control de Impresos - Insumos - Estibas</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" id="backLink" href="modulo.html">&#8592;</a>
+    <div>
+      <h1 id="titulo">Registrar consumo interno</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <main>
+    <div class="info-msg" id="toastExito" style="display:none;"></div>
+    <div class="error-msg" id="errorMsg"></div>
+
+    <div class="card">
+      <label for="buscarInsumo">Insumo</label>
+      <div class="buscador">
+        <input type="text" id="buscarInsumo" placeholder="Buscar por nombre o código..." autocomplete="off" style="margin-bottom:0;">
+        <div class="resultados" id="resultados" style="display:none;"></div>
+      </div>
+      <div id="itemElegido"></div>
+
+      <div id="bloqueCantidad" style="display:none;">
+        <label for="inpCantidad">Cantidad consumida</label>
+        <input type="number" id="inpCantidad" step="0.01" min="0.01" placeholder="0">
+
+        <div class="stock-preview" id="stockPreview"></div>
+
+        <label>Razón del consumo</label>
+        <div class="chip-row" id="chipsRazon">
+          <span class="chip on" data-razon="Limpieza">Limpieza</span>
+          <span class="chip" data-razon="Mantenimiento">Mantenimiento</span>
+          <span class="chip" data-razon="Pruebas / control de calidad">Pruebas / control de calidad</span>
+          <span class="chip" data-razon="Daño o pérdida">Daño o pérdida</span>
+          <span class="chip" data-razon="Otro">Otro</span>
+        </div>
+
+        <label for="inpDetalle" id="labelDetalle">Detalle (opcional)</label>
+        <textarea id="inpDetalle" placeholder="Ej: cabuya usada para asegurar el pedido de la referencia X..."></textarea>
+
+        <button class="btn btn-primary" id="btnRegistrar" style="margin-top:6px;">Registrar consumo</button>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:var(--gris);margin:20px 0 8px;">Consumos internos recientes</p>
+    <div id="listaRecientes"></div>
+  </main>
+</div>
+<script src="js/app.js"></script>
+<script>
+  const ctx = requiereModulo();
+  if (ctx) {
+    const { usuario, mod, empresaActual } = ctx;
+    document.getElementById("backLink").href = "modulo.html?modulo=" + mod.key;
+    document.getElementById("titulo").textContent = "Registrar consumo interno";
+    document.getElementById("sub").textContent = mod.label;
+
+    if (!puedeIngresarStock(usuario.rol)) {
+      document.querySelector("main").innerHTML = '<p style="font-size:13px;color:var(--gris);margin-top:20px;">No tienes permiso para registrar consumos internos en este módulo.</p>';
+    } else {
+      let itemsInv = [];
+      let codigoHeader = null, refHeader = null, stockHeader = null;
+      let itemElegido = null;
+      let razonElegida = "Limpieza";
+
+      // Clave de intento para "Registrar consumo" (mismo mecanismo que en
+      // Ingresar stock / Nueva requisición): se mantiene mientras un intento
+      // sigue fallando, y se renueva después de un consumo exitoso.
+      let idemConsumo = null;
+      function nuevaIdemSiHaceFalta() {
+        if (!idemConsumo) idemConsumo = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("idem-" + Date.now() + "-" + Math.random());
+        return idemConsumo;
+      }
+
+      async function cargarItems() {
+        // Filtrado por empresa activa, igual que en Ingresar stock / Nueva
+        // requisición: en Insumos no se debe mezclar el inventario de
+        // Contubos y Tecnipapel en este buscador.
+        const invData = await apiGet("getInventario", { modulo: mod.key, empresa: empresaActual });
+        itemsInv = invData.items || [];
+        if (itemsInv[0]) {
+          codigoHeader = buscarEncabezado(itemsInv[0], "Código");
+          refHeader = buscarEncabezado(itemsInv[0], "Referencia");
+          stockHeader = buscarEncabezado(itemsInv[0], "Stock actual");
+        }
+      }
+
+      async function cargarRecientes() {
+        const data = await apiGet("getConsumosInternos", { modulo: mod.key, empresa: empresaActual }, { silencioso: true });
+        const items = data.items || [];
+        document.getElementById("listaRecientes").innerHTML = items.length === 0
+          ? '<p style="font-size:13px;color:var(--gris);">Todavía no se han registrado consumos internos.</p>'
+          : items.map((r) => `
+              <div class="req-item">
+                <div class="fila">
+                  <span class="reqid">${r["ID"]}</span>
+                  <span class="badge badge-Crítico">-${r["Cantidad"]} ${mod.unitLabel}</span>
+                </div>
+                <p class="op" style="font-weight:600;">${r["Referencia"] || r["Código"]}</p>
+                <p class="op">Registró ${r["Registró"]} · ${r["Fecha"]} ${r["Hora"] || ""}${r["Empresa"] ? " · " + r["Empresa"] : ""} · ${r["Razón"]}</p>
+                ${r["Detalle"] ? `<p class="op">${r["Detalle"]}</p>` : ""}
+              </div>`).join("");
+      }
+
+      const inpBuscar = document.getElementById("buscarInsumo");
+      const contResultados = document.getElementById("resultados");
+
+      inpBuscar.addEventListener("input", () => {
+        const q = inpBuscar.value.trim().toLowerCase();
+        if (!q) { contResultados.style.display = "none"; return; }
+        const encontrados = itemsInv.filter((it) =>
+          String(it[refHeader] || "").toLowerCase().includes(q) ||
+          String(it[codigoHeader] || "").toLowerCase().includes(q));
+        if (encontrados.length === 0) {
+          contResultados.innerHTML = '<div class="resultado-item" style="color:var(--gris);cursor:default;">Sin resultados</div>';
+        } else {
+          contResultados.innerHTML = encontrados.map((it) => `
+            <div class="resultado-item" data-idx="${itemsInv.indexOf(it)}">
+              <div class="ref">${it[refHeader]}</div>
+              <div class="meta">${it[codigoHeader]} · stock actual ${it[stockHeader]} ${mod.unitLabel}</div>
+            </div>`).join("");
+        }
+        contResultados.style.display = "block";
+      });
+
+      contResultados.addEventListener("click", (e) => {
+        const fila = e.target.closest(".resultado-item[data-idx]");
+        if (!fila) return;
+        elegirItem(itemsInv[Number(fila.dataset.idx)]);
+      });
+
+      function elegirItem(it) {
+        itemElegido = it;
+        inpBuscar.value = "";
+        contResultados.style.display = "none";
+        document.getElementById("itemElegido").innerHTML = `
+          <div class="item-elegido">
+            <div>
+              <div class="ref">${it[refHeader]}</div>
+              <div class="meta">${it[codigoHeader]} · stock actual ${it[stockHeader]} ${mod.unitLabel}</div>
+            </div>
+            <button type="button" class="quitar" id="btnQuitar">Quitar</button>
+          </div>`;
+        document.getElementById("bloqueCantidad").style.display = "block";
+        document.getElementById("inpCantidad").value = "";
+        document.getElementById("itemElegido").querySelector("#btnQuitar").addEventListener("click", quitarItem);
+        actualizarPreview();
+      }
+      function quitarItem() {
+        itemElegido = null;
+        document.getElementById("itemElegido").innerHTML = "";
+        document.getElementById("bloqueCantidad").style.display = "none";
+      }
+
+      document.getElementById("inpCantidad").addEventListener("input", actualizarPreview);
+
+      function actualizarPreview() {
+        if (!itemElegido) return;
+        const stockActual = Number(itemElegido[stockHeader]) || 0;
+        const cant = Number(document.getElementById("inpCantidad").value) || 0;
+        const resultado = stockActual - cant;
+        document.getElementById("stockPreview").innerHTML = `
+          <div class="stock-box">
+            <p class="l">Stock actual</p>
+            <p class="v">${stockActual} ${mod.unitLabel}</p>
+          </div>
+          <div class="stock-box resultado">
+            <p class="l">Stock después</p>
+            <p class="v ${resultado < 0 ? "negativo" : ""}">${resultado} ${mod.unitLabel}</p>
+          </div>`;
+      }
+
+      document.getElementById("chipsRazon").addEventListener("click", (e) => {
+        const chip = e.target.closest(".chip");
+        if (!chip) return;
+        razonElegida = chip.dataset.razon;
+        document.querySelectorAll("#chipsRazon .chip").forEach((c) => c.classList.toggle("on", c === chip));
+        document.getElementById("labelDetalle").textContent =
+          razonElegida === "Otro" ? "Detalle (obligatorio)" : "Detalle (opcional)";
+      });
+
+      document.getElementById("btnRegistrar").addEventListener("click", async () => {
+        ocultarError("errorMsg");
+        const cantidad = Number(document.getElementById("inpCantidad").value) || 0;
+        const detalle = document.getElementById("inpDetalle").value.trim();
+        const stockActual = itemElegido ? (Number(itemElegido[stockHeader]) || 0) : 0;
+
+        if (!itemElegido) { mostrarError("errorMsg", "Elige un insumo."); return; }
+        if (cantidad <= 0) { mostrarError("errorMsg", "La cantidad consumida debe ser mayor que cero."); return; }
+        if (cantidad > stockActual) { mostrarError("errorMsg", "No puedes consumir más de lo que hay en stock (" + stockActual + " " + mod.unitLabel + ")."); return; }
+        if (razonElegida === "Otro" && !detalle) { mostrarError("errorMsg", 'Con razón "Otro" el detalle es obligatorio.'); return; }
+
+        try {
+          const res = await apiPost("registrarConsumoInterno", {
+            modulo: mod.key,
+            codigo: itemElegido[codigoHeader],
+            cantidad: cantidad,
+            razon: razonElegida,
+            detalle: detalle,
+            registro: usuario.nombre,
+            empresa: empresaActual,
+            idempotencia: nuevaIdemSiHaceFalta(),
+          });
+          idemConsumo = null; // se guardó bien: el próximo clic es un consumo nuevo, necesita clave nueva
+          mostrarToast(`Consumo registrado (${res.id})`);
+          if (res.stockOk === false) alert("El consumo quedó registrado, pero no se pudo actualizar el stock del ítem — revisa que el código exista bien en el inventario.");
+          document.getElementById("inpDetalle").value = "";
+          quitarItem();
+          document.querySelectorAll("#chipsRazon .chip").forEach((c) => c.classList.toggle("on", c.dataset.razon === "Limpieza"));
+          razonElegida = "Limpieza";
+          document.getElementById("labelDetalle").textContent = "Detalle (opcional)";
+          cargarItems();
+          cargarRecientes();
+        } catch (err) {
+          mostrarError("errorMsg", err.message);
+        }
+      });
+
+      cargarItems();
+      cargarRecientes();
+    }
+  }
+</script>
+</body>
+</html>
