@@ -128,9 +128,9 @@
           <div class="expr-box" id="exprBox-${id}"></div>
           <div class="total-calc"><span class="l">Total</span><span class="v" id="totalCalc-${id}">0</span></div>
           <div class="teclado-calc">
-            ${teclas.map((t) => `<div class="tecla-calc ${clases[t] || ""}" data-id="${id}" data-tecla="${t}">${t}</div>`).join("")}
+            ${teclas.map((t) => `<div class="tecla-calc ${clases[t] || ""}" data-id="${id}" data-tecla="${t}" style="touch-action:manipulation;">${t}</div>`).join("")}
           </div>
-          <div class="tecla-calc op mas" data-id="${id}" data-tecla="+">+ Sumar</div>
+          <div class="tecla-calc op mas" data-id="${id}" data-tecla="+" style="touch-action:manipulation;">+ Sumar</div>
           <div class="fila-botones-calc">
             <button type="button" class="btn btn-secondary" data-calc-cancelar="${id}">Cancelar</button>
             <button type="button" class="btn btn-primary" data-calc-usar="${id}">Usar este total &#8594;</button>
@@ -202,6 +202,16 @@
       if (btnToggle) btnToggle.textContent = "🧮 Usar calculadora";
     }
 
+    // Las tarjetas de "Entregar" y las de "Registrar devolución" pueden
+    // mostrar el MISMO ID de requisición a la vez (una requisición ya
+    // entregada que sigue apareciendo ahí para su devolución) — por eso la
+    // calculadora de devolución usa una clave con prefijo "dev-" para no
+    // compartir estado (ni el input de destino) con la de entrega.
+    function inputIdParaCalc(id) {
+      const s = String(id);
+      return s.indexOf("dev-") === 0 ? "inpDev-" + s.slice(4) : "inpCant-" + s;
+    }
+
     function usarTotalCalc(id) {
       const calc = obtenerCalc(id);
       const total = evaluarExpresion(calc.expr);
@@ -209,7 +219,7 @@
         mostrarToast("Escribe una suma válida antes de usar el total.");
         return;
       }
-      const inputCant = document.getElementById("inpCant-" + id);
+      const inputCant = document.getElementById(inputIdParaCalc(id));
       if (inputCant) inputCant.value = total;
       cancelarCalc(id);
       mostrarToast("Total aplicado: " + total + " " + mod.unitLabel);
@@ -265,32 +275,43 @@
             </div>`;
           }).join("");
 
-      // Botones/teclas de la calculadora (uno por tarjeta que ya la tenía
-      // abierta de antes de este repintado) y los toggles "Usar calculadora".
+      if (mod.hasDevolucion) {
+        document.getElementById("seccionDevoluciones").style.display = "";
+        const contEnt = document.getElementById("entregadas");
+        contEnt.innerHTML = entregadas.length === 0
+          ? '<p style="font-size:13px;color:var(--gris);">No hay requisiciones entregadas.</p>'
+          : entregadas.map((r) => {
+              const idCalc = "dev-" + r.ID;
+              return `
+            <div class="req-item">
+              <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Entregado">Entregado</span></div>
+              <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
+              ${detalleRequisicion(r, mod)}
+              <form onsubmit="return devolver(event, '${r.ID}')" data-idem="${nuevoIdemKey()}">
+                <input type="number" placeholder="Kg devuelto" class="inp-cant" id="inpDev-${r.ID}" step="0.01" min="0" required>
+                <button type="button" class="btn-calc-toggle" data-calc-toggle="${idCalc}">🧮 ${obtenerCalc(idCalc).abierto ? "Ocultar calculadora" : "Usar calculadora"}</button>
+                ${obtenerCalc(idCalc).abierto ? panelCalcHTML(idCalc) : ""}
+                <input type="text" placeholder="Quién devuelve (producción)" class="inp-quien" required>
+                <button class="btn btn-primary">Registrar devolución</button>
+              </form>
+            </div>`;
+            }).join("");
+      }
+
+      // Botones/teclas de la calculadora (una por tarjeta que ya la tenía
+      // abierta de antes de este repintado) y los toggles "Usar calculadora"
+      // — de entrega y de devolución juntos, ya con las dos secciones
+      // dibujadas.
       document.querySelectorAll(".btn-calc-toggle").forEach((btn) => {
         btn.addEventListener("click", () => toggleCalc(btn.dataset.calcToggle));
       });
       pendientes.forEach((r) => {
         if (obtenerCalc(r.ID).abierto) bindCalcListeners(r.ID);
       });
-
-      if (mod.hasDevolucion) {
-        document.getElementById("seccionDevoluciones").style.display = "";
-        const contEnt = document.getElementById("entregadas");
-        contEnt.innerHTML = entregadas.length === 0
-          ? '<p style="font-size:13px;color:var(--gris);">No hay requisiciones entregadas.</p>'
-          : entregadas.map((r) => `
-            <div class="req-item">
-              <div class="fila"><span class="reqid">${r.ID}</span><span class="badge badge-Entregado">Entregado</span></div>
-              <p class="op" style="font-weight:600;">${r["Referencia"]}</p>
-              ${detalleRequisicion(r, mod)}
-              <form onsubmit="return devolver(event, '${r.ID}')" data-idem="${nuevoIdemKey()}">
-                <input type="number" placeholder="Kg devuelto" class="inp-cant" step="0.01" min="0" required>
-                <input type="text" placeholder="Quién devuelve (producción)" class="inp-quien" required>
-                <button class="btn btn-primary">Registrar devolución</button>
-              </form>
-            </div>`).join("");
-      }
+      entregadas.forEach((r) => {
+        const idCalc = "dev-" + r.ID;
+        if (obtenerCalc(idCalc).abierto) bindCalcListeners(idCalc);
+      });
 
       // Si se llegó aquí con un enlace directo desde "Cola de pendientes" en
       // modulo.html (ej: bodega.html#req-INS-0005), lleva la vista hasta esa
@@ -332,6 +353,7 @@
       const quienDevuelve = form.querySelector(".inp-quien").value;
       try {
         await apiPost("devolverRequisicion", { modulo: mod.key, id, cantidadDevuelta, quienDevuelve, recibio: usuario.nombre, idempotencia: form.dataset.idem });
+        delete calcState["dev-" + id]; // se devolvió bien: si la tarjeta reaparece, la calculadora empieza limpia
         cargar();
       } catch (err) { alert(err.message); }
       return false;
