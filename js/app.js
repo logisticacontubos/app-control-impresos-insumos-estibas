@@ -161,7 +161,8 @@ function ocultarCargando() {
 // entregar la respuesta, no un error del código. Como reintentar la MISMA
 // petición GET (leer datos) es seguro, pero reintentar un POST (crear/
 // entregar/devolver) podría duplicar la operación si la primera sí se
-// guardó, aquí solo se reintenta automáticamente cuando es seguro hacerlo.
+// guardó, aquí solo se reintenta automáticamente cuando es seguro hacerlo
+// (ver el comentario dentro de apiPost sobre "idempotencia").
 //
 // Además de fallar, a veces ese mismo problema hace que el intento se quede
 // "colgado" muchos segundos (10, 15, más) antes de que Google por fin
@@ -207,20 +208,31 @@ async function apiPost(accion, datos, opts) {
   const silencioso = opts && opts.silencioso;
   if (!silencioso) mostrarCargando(MENSAJES_CARGA[accion] || "Procesando...");
   try {
-    // Los POST que SÍ cambian datos (crear/entregar/devolver/ingresar stock)
-    // NO se reintentan automáticamente: si la primera petición sí se guardó
-    // en la hoja pero la respuesta se perdió, reintentar duplicaría la
-    // operación. "login" es la única excepción — es de solo lectura, no
-    // cambia nada, así que si el problema intermitente de Google pega justo
-    // ahí, es seguro reintentarlo solo en vez de que la persona piense que
-    // escribió mal su PIN.
-    const reintentos = accion === "login" ? 2 : 0;
+    // Antes, NINGÚN POST que cambia datos se reintentaba: si la primera
+    // petición sí se había guardado en la hoja pero la respuesta se perdió
+    // o se demoró más que el límite de tiempo (AbortError, "se demoró
+    // demasiado"), la persona veía un error aunque la operación ya hubiera
+    // quedado registrada — confuso, porque tocaba ir a revisar a mano si de
+    // verdad se había guardado o no (esto fue justo lo que pasó con una
+    // entrega en Bodega).
+    // Ahora, cuando la acción viaja con una "idempotencia" (así viajan casi
+    // todas las que cambian datos: entregar, devolver, ingresar stock,
+    // cortes, consumo interno, requisiciones...), SÍ se reintenta una vez
+    // sola. Es seguro: el backend reconoce la misma clave y, si ya se había
+    // guardado, devuelve el mismo resultado sin duplicar nada (eso es lo
+    // que avisa "duplicadoEvitado" más abajo) — así que el reintento, en el
+    // peor de los casos, simplemente confirma que ya quedó bien, en vez de
+    // mostrar un error en falso. Si la acción no trae idempotencia (no está
+    // protegida contra duplicados), se mantiene el comportamiento anterior:
+    // no se reintenta sola. "login" también se reintenta, aparte, porque es
+    // de solo lectura (no cambia nada).
+    const reintentos = accion === "login" ? 2 : (body.idempotencia ? 1 : 0);
     const resultado = await fetchConReintento((signal) => fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(body),
       signal: signal,
-    }), reintentos);
+    }), reintentos, 12000);
     // El backend marca "duplicadoEvitado" cuando reconoce que esta misma
     // acción (misma "idempotencia") ya se había procesado antes — por
     // ejemplo, la persona reintentó tras un error de red pero la primera vez
